@@ -48,13 +48,13 @@ font:
         glyphs: !include ../../../common/assets/hebrew_glyphs.yaml
 
   # Card labels
-  - file: "gfonts://Roboto@Medium"
+  - file: "gfonts://Roboto@Bold"
     id: font_text_card_label
     size: 21
     bpp: 1
     glyphs: !include ../../../common/assets/text_glyphs.yaml
     extras:
-      - file: "gfonts://Heebo@Medium"
+      - file: "gfonts://Heebo@Bold"
         glyphs: !include ../../../common/assets/hebrew_glyphs.yaml
 
   # Sensor unit suffixes inside cards

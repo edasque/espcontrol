@@ -59,8 +59,8 @@ lvgl:
         type: grid
         grid_columns: [FR(1), FR(1), FR(1), FR(1)]
         grid_rows: [FR(1), FR(1), FR(1)]
-        pad_row: 6
-        pad_column: 6
+        pad_row: 10
+        pad_column: 10
       width: 100%
       bg_color: 0xFFFFFF
       bg_opa: cover
