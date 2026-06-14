@@ -42,10 +42,8 @@ function exportConfig() {
       outdoor_temp_entity: state.outdoorEntity,
       temperature_unit: normalizeTemperatureUnit(state.temperatureUnit),
       clock_bar: state.clockBarOn,
-      clock_bar_layout: serializeClockBarLayout(state.clockBarLayout),
+      clock_bar_layout: CLOCK_BAR_FIXED_LAYOUT_STRING,
       clock_bar_time: state.clockBarTimeOn,
-      clock_bar_weather_icon: state.clockBarWeatherOn,
-      clock_bar_weather_entity: state.clockBarWeatherEntity,
       network_status_icon: state.networkStatusOn,
       temperature_degree_symbol: state.temperatureDegreeSymbolOn,
       subpage_chevron: state.subpageChevronsOn,
@@ -61,6 +59,7 @@ function exportConfig() {
       media_player_sleep_prevention_entity: state.coverArtMediaPlayerEntity,
       cover_art_screensaver: state.coverArtScreensaverOn,
       cover_art_media_player_entity: state.coverArtMediaPlayerEntity,
+      cover_art_attribute_conditions: state.coverArtAttributeConditions,
       cover_art_delay: state.coverArtDelay,
       cover_art_track_overlay_duration: state.coverArtTrackOverlayDuration,
       cover_art_hide_external_input: state.coverArtHideExternalInputOn,
@@ -79,6 +78,8 @@ function exportConfig() {
       brightness_day: Math.round(state.brightnessDayVal),
       brightness_night: Math.round(state.brightnessNightVal),
       automatic_brightness: !!state.automaticBrightnessEnabled,
+      brightness_dawn_time: normalizeTimeOfDay(state.brightnessDawnTime, "06:00"),
+      brightness_dusk_time: normalizeTimeOfDay(state.brightnessDuskTime, "18:00"),
       schedule_trigger: normalizeScheduleTrigger(state.scheduleTrigger, state.scheduleEnabled),
       schedule_enabled: !!state.scheduleEnabled,
       schedule_on_hour: normalizeHour(state.scheduleOnHour, 6),
@@ -179,7 +180,7 @@ function importConfig() {
         var importedSettings = EspControlModel.normalizeBackupPanelSettings(s, {
           timezone: state.timezone,
           language: state.language,
-          clockBarLayout: serializeClockBarLayout(state.clockBarLayout),
+          clockBarLayout: CLOCK_BAR_FIXED_LAYOUT_STRING,
           clockFormat: state.clockFormat,
           clockFormatOptions: state.clockFormatOptions,
           developerExperimentalFeatures: state.developerExperimentalFeatures,
@@ -190,13 +191,19 @@ function importConfig() {
           screenRotationOptions: allScreenRotationOptions(),
         });
 
-        applyClockBarTemperatureEntities(importedSettings.clockBarTemperatureEntities, true);
+        state._clockBarTemperatureVisibilityReceived = true;
+        state._outdoorOn = importedSettings.outdoorTempEnable;
+        state._indoorOn = importedSettings.indoorTempEnable;
+        applyClockBarTemperatureEntities(importedSettings.clockBarTemperatureEntities, false);
+        postClockBarTemperatureEntities(serializeClockBarTemperatureEntities(importedSettings.clockBarTemperatureEntities));
+        postSwitch(entityName("outdoor_temp_enable"), importedSettings.outdoorTempEnable);
+        postSwitch(entityName("indoor_temp_enable"), importedSettings.indoorTempEnable);
+        postText(entityName("outdoor_temp_entity"), importedSettings.outdoorTempEntity);
+        postText(entityName("indoor_temp_entity"), importedSettings.indoorTempEntity);
         postClockBar(importedSettings.clockBar);
-        applyClockBarLayoutValue(importedSettings.clockBarLayout);
-        postClockBarLayout(importedSettings.clockBarLayout);
+        applyClockBarLayoutValue(CLOCK_BAR_FIXED_LAYOUT_STRING);
+        postClockBarLayout(CLOCK_BAR_FIXED_LAYOUT_STRING);
         postClockBarTime(importedSettings.clockBarTime);
-        postClockBarWeatherIcon(importedSettings.clockBarWeatherIcon);
-        postText(entityName("clock_bar_weather_entity"), importedSettings.clockBarWeatherEntity);
         postNetworkStatusIcon(importedSettings.networkStatusIcon);
         postTemperatureDegreeSymbol(importedSettings.temperatureDegreeSymbol);
         postSubpageChevron(importedSettings.subpageChevron);
@@ -233,9 +240,10 @@ function importConfig() {
         postSwitch(entityName("screen_saver_media_player_sleep_prevention"), importedSettings.mediaPlayerSleepPrevention);
         postSwitch(entityName("screen_saver_cover_art"), importedSettings.coverArtScreensaver);
         postText(entityName("screen_saver_cover_art_entity"), importedSettings.coverArtMediaPlayerEntity);
+        postText(entityName("screen_saver_cover_art_conditions"), importedSettings.coverArtAttributeConditions);
         postNumber(entityName("screen_saver_cover_art_delay"), importedSettings.coverArtDelay);
         postNumber(entityName("screen_saver_track_overlay_duration"), importedSettings.coverArtTrackOverlayDuration);
-        postSwitch(entityName("screen_saver_hide_cover_art_external_input"), importedSettings.coverArtHideExternalInput);
+        postCoverArtHideExternalInput(importedSettings.coverArtHideExternalInput);
         var importedScreensaverAction = importedSettings.screensaverAction;
         var importedScreensaverDimmedBrightness = importedSettings.screensaverDimmedBrightness;
         var importedClockBrightnessDay = importedSettings.clockBrightnessDay;
@@ -261,8 +269,6 @@ function importConfig() {
         state.temperatureUnit = importedTemperatureUnit;
         state.clockBarOn = importedSettings.clockBar;
         state.clockBarTimeOn = importedSettings.clockBarTime;
-        state.clockBarWeatherOn = importedSettings.clockBarWeatherIcon;
-        state.clockBarWeatherEntity = importedSettings.clockBarWeatherEntity;
         state.networkStatusOn = importedSettings.networkStatusIcon;
         state.temperatureDegreeSymbolOn = importedSettings.temperatureDegreeSymbol;
         state.subpageChevronsOn = importedSettings.subpageChevron;
@@ -281,6 +287,7 @@ function importConfig() {
         state.mediaPlayerSleepPreventionEntity = importedSettings.coverArtMediaPlayerEntity;
         state.coverArtScreensaverOn = importedSettings.coverArtScreensaver;
         state.coverArtMediaPlayerEntity = importedSettings.coverArtMediaPlayerEntity;
+        state.coverArtAttributeConditions = importedSettings.coverArtAttributeConditions;
         state.coverArtDelay = importedSettings.coverArtDelay;
         state.coverArtTrackOverlayDuration = importedSettings.coverArtTrackOverlayDuration;
         state.coverArtHideExternalInputOn = importedSettings.coverArtHideExternalInput;
@@ -303,6 +310,7 @@ function importConfig() {
         syncInput(els.setPresence, state.presenceEntity);
         syncMediaPlayerSleepPreventionUi();
         syncInput(els.setCoverArtMediaPlayer, state.coverArtMediaPlayerEntity);
+        syncInput(els.setCoverArtConditions, state.coverArtAttributeConditions);
         syncCoverArtScreensaverUi();
         syncThemeUi();
         if (els.setTimezone) els.setTimezone.value = state.timezone;
@@ -333,6 +341,8 @@ function importConfig() {
         state.brightnessDayVal = importedScreenSettings.brightnessDayVal;
         state.brightnessNightVal = importedScreenSettings.brightnessNightVal;
         state.automaticBrightnessEnabled = importedScreenSettings.automaticBrightnessEnabled;
+        state.brightnessDawnTime = importedScreenSettings.brightnessDawnTime;
+        state.brightnessDuskTime = importedScreenSettings.brightnessDuskTime;
         state.scheduleTrigger = importedScreenSettings.scheduleTrigger;
         state.scheduleEnabled = importedScreenSettings.scheduleEnabled;
         state.scheduleOnHour = importedScreenSettings.scheduleOnHour;
@@ -347,6 +357,8 @@ function importConfig() {
         postNumber(entityName("screen_daytime_brightness"), state.brightnessDayVal);
         postNumber(entityName("screen_nighttime_brightness"), state.brightnessNightVal);
         postAutomaticBrightnessEnabled(state.automaticBrightnessEnabled);
+        postBrightnessDawnTime(state.brightnessDawnTime);
+        postBrightnessDuskTime(state.brightnessDuskTime);
         postScreenScheduleTrigger(state.scheduleTrigger);
         postScreenScheduleOnHour(state.scheduleOnHour);
         postScreenScheduleOffHour(state.scheduleOffHour);

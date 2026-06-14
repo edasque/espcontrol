@@ -59,9 +59,9 @@ def package_substitution_lines(device: dict) -> list[str]:
 def cover_art_substitution_lines(device: dict) -> list[str]:
     layouts = {
         "guition-esp32-s3-4848s040": {
-            "cover_art_size": "320",
-            "cover_art_x": "80",
-            "cover_art_y": "80",
+            "cover_art_size": "480",
+            "cover_art_x": "0",
+            "cover_art_y": "0",
             "cover_art_accent_x": "0",
             "cover_art_accent_y": "0",
             "cover_art_accent_width": "480",
@@ -340,11 +340,17 @@ def package_file_text(device: dict) -> str:
             include_line("screen_setup", "!include ../../common/device/screen_button_setup.yaml"),
             include_line("screen_clock", "!include ../../common/device/screen_clock.yaml"),
             include_line("screen_art", "!include ../../common/device/screen_cover_art.yaml"),
-            include_line(
-                "image_cards",
-                "!include ../../common/device/image_cards.yaml"
-                if int(device.get("image_card_downloaders", 4)) == 4
-                else f"!include ../../common/device/image_cards_{int(device.get('image_card_downloaders', 4))}.yaml",
+            *(
+                [
+                    include_line(
+                        "image_cards",
+                        "!include ../../common/device/image_cards.yaml"
+                        if int(device.get("image_card_downloaders", 4)) == 4
+                        else f"!include ../../common/device/image_cards_{int(device.get('image_card_downloaders', 4))}.yaml",
+                    )
+                ]
+                if int(device.get("image_card_downloaders", 4)) > 0
+                else []
             ),
             "  # ---------------------------------------------------------------------------",
             "  # Main page and dynamic sensor subscriptions (after setup screens)",
@@ -477,25 +483,50 @@ def cfg_lines(device: dict) -> list[str]:
         )
     lines.append("            cfg.temperature_unit = id(temperature_unit_select).current_option();")
     lines.append("            cfg.timezone = id(timezone_select).current_option();")
-    lines.append("            cfg.pause_home_idle = []() {")
-    lines.append("              id(home_screen_idle_suspended) = true;")
-    lines.append("              id(home_screen_idle_check).stop();")
+    lines.append("            cfg.suspend_display_takeover = []() {")
+    lines.append("              id(display_takeover_suspended) = true;")
+    lines.append("              id(screensaver_idle_check).stop();")
+    lines.append("              id(screensaver_sleep_timer).stop();")
+    lines.append("              id(screensaver_sleep_sensor).stop();")
+    lines.append("              id(screensaver_sleep_display_off).stop();")
+    lines.append("              id(backlight_sleep_display_off).stop();")
+    lines.append("              id(backlight_fade_current_ui_to_black).stop();")
+    lines.append("              id(backlight_schedule_display_off).stop();")
+    lines.append("              id(show_clock_view).stop();")
+    lines.append("              id(show_dimmed_view).stop();")
+    lines.append("              id(clock_screensaver_refresh_brightness).stop();")
+    lines.append("              id(screensaver_dimmed_refresh_brightness).stop();")
+    lines.append("              id(display_asleep) = false;")
+    lines.append("              id(screensaver_display_off_active) = false;")
+    lines.append("              id(screensaver_dimmed_active) = false;")
+    lines.append("              lv_obj_add_flag(id(dim_screensaver_touch_guard), LV_OBJ_FLAG_HIDDEN);")
+    lines.append("              id(backlight_apply_brightness).execute();")
     lines.append("            };")
-    lines.append("            cfg.resume_home_idle = []() {")
-    lines.append("              id(home_screen_idle_suspended) = false;")
+    lines.append("            cfg.resume_display_takeover = []() {")
+    lines.append("              id(display_takeover_suspended) = false;")
+    lines.append("              if (id(screensaver_sensor_sleep_pending) &&")
+    lines.append("                  id(screensaver_mode).state == \"sensor\" &&")
+    lines.append("                  !id(presence_detected)) {")
+    lines.append("                id(screensaver_sleep_sensor).execute();")
+    lines.append("                return;")
+    lines.append("              }")
     lines.append("              id(home_screen_idle_check).execute();")
+    lines.append("              id(screensaver_idle_check).execute();")
     lines.append("            };")
-    lines.append("            static esphome::artwork_image::ArtworkImage *image_card_downloaders[] = {")
-    for num in range(1, image_card_count + 1):
-        lines.append(f"              id(image_card_download_{num}),")
-    lines.append("            };")
-    lines.append("            static esphome::artwork_image::ArtworkImage *image_card_modal_downloaders[] = {")
-    for num in range(1, image_card_count + 1):
-        lines.append(f"              id(image_card_modal_download_{num}),")
-    lines.append("            };")
-    lines.append("            cfg.image_card_images = image_card_downloaders;")
-    lines.append("            cfg.image_card_modal_images = image_card_modal_downloaders;")
-    lines.append(f"            cfg.image_card_image_count = {image_card_count};")
+    if image_card_count > 0:
+        lines.append("            static esphome::artwork_image::ArtworkImage *image_card_downloaders[] = {")
+        for num in range(1, image_card_count + 1):
+            lines.append(f"              id(image_card_download_{num}),")
+        lines.append("            };")
+        lines.append("            static esphome::artwork_image::ArtworkImage *image_card_modal_downloaders[] = {")
+        for num in range(1, image_card_count + 1):
+            lines.append(f"              id(image_card_modal_download_{num}),")
+        lines.append("            };")
+        lines.append("            cfg.image_card_images = image_card_downloaders;")
+        lines.append("            cfg.image_card_modal_images = image_card_modal_downloaders;")
+        lines.append(f"            cfg.image_card_image_count = {image_card_count};")
+    if device.get("image_card_diagnostics"):
+        lines.append("            cfg.image_card_diagnostics = true;")
     lines.append("            cfg.home_assistant_base_url = []() {")
     lines.append("              std::string base = id(cover_art_home_assistant_base_url);")
     lines.append("              while (!base.empty() && base.back() == '/') base.pop_back();")
@@ -519,6 +550,8 @@ def cfg_lines(device: dict) -> list[str]:
     lines.append("            set_width_compensation_vertical_axis(cfg.width_compensation_vertical);")
     lines.append("            apply_width_compensation(id(display_time), cfg.width_compensation_percent);")
     lines.append("            apply_width_compensation(id(temperatures), cfg.width_compensation_percent);")
+    for index in range(2, 7):
+        lines.append(f"            apply_width_compensation(id(temperature_{index}), cfg.width_compensation_percent);")
     lines.append("            apply_width_compensation(id(clock_label), cfg.width_compensation_percent);")
     return lines
 
@@ -621,9 +654,7 @@ def phase2_block(device: dict) -> str:
 
 
 def script_block(device: dict) -> str:
-    after_refresh = []
-    if device["slug"] in {"esp32-p4-86", "guition-esp32-s3-4848s040"}:
-        after_refresh.append("      - script.execute: clock_bar_apply")
+    after_refresh = ["      - script.execute: clock_bar_apply"]
     return "\n".join(
         [
             "script:",
@@ -659,21 +690,9 @@ def replace_phase(text: str, phase: int, block: str, call: str, slug: str) -> st
 
 def replace_script_block(text: str, device: dict) -> str:
     block = script_block(device)
-    marker = re.compile(
-        r"(?ms)^script:\n"
-        r"  - id: refresh_button_grid\n"
-        r".*?^          grid_(?:phase1|refresh_layout)\(slots, cfg,\n"
-        r"^            id\(button_order\)\.state,\n"
-        r"(?:(?:^            id\(button_on_color\)\.state,\n"
-        r"^            id\(button_off_color\)\.state,\n"
-        r"^            id\(sensor_card_color\)\.state,\n"
-        r"))?"
-        r"^            id\(main_page\)->obj\);\n"
-        r"(?:^      - script\.execute: clock_bar_apply\n)*"
-        r"^\n?"
-    )
+    marker = re.compile(r"(?ms)^script:\n.*?(?=^esphome:)")
     if marker.search(text):
-        return marker.sub(block, text, count=1)
+        return marker.sub(block + "\n", text, count=1)
     insert_at = text.find("\nesphome:")
     if insert_at < 0:
         raise ValueError(f"Could not find esphome block for {device['slug']}")

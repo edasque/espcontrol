@@ -6,6 +6,12 @@ function uniquePush(list, value) {
   if (value && list.indexOf(value) === -1) list.push(value);
 }
 
+function postQuiet(url) {
+  return fetch(url, { method: "POST", keepalive: true }).catch(function () {
+    return null;
+  });
+}
+
 function entityDef(key) {
   return ENTITY_CATALOG.entities[key] || {};
 }
@@ -132,7 +138,6 @@ function rememberConfiguredEntities() {
   clockBarTemperatureEntities().forEach(function (entityId, index) {
     rememberEntityName(entityId, "Clock Bar Temperature " + (index + 1));
   });
-  rememberEntityName(state.clockBarWeatherEntity, "Clock Bar Weather");
   rememberEntityName(state.presenceEntity, "Presence Sensor");
   rememberEntityName(state.coverArtMediaPlayerEntity, "Media Player");
 }
@@ -447,12 +452,85 @@ function postFirmwareUpdateCheck() {
   post(urls, null, "Could not check for firmware update.");
 }
 
-function ensurePublicFirmwareOtaUrl() {
+function ensurePublicFirmwareOtaUrl(info) {
+  info = info || selectedFirmwareInfo();
+  if (info && info.ota_url) return Promise.resolve(info.ota_url);
   if (state.firmwareOtaUrl) return Promise.resolve(state.firmwareOtaUrl);
-  return getJsonQuietly(publicFirmwareManifestUrl(), function (d) {
-    setPublicFirmwareInfo(firmwareInfoFromPublicManifest(d));
+  return getJsonQuietly(publicFirmwareVersionsUrl(), function (d) {
+    setPublicFirmwareVersions(firmwareInfosFromPublicVersions(d));
   }).then(function () {
-    return state.firmwareOtaUrl || "";
+    info = selectedFirmwareInfo();
+    if (info && info.ota_url) return info.ota_url;
+    return getJsonQuietly(publicFirmwareManifestUrl(), function (d) {
+      setPublicFirmwareInfo(firmwareInfoFromPublicManifest(d));
+    }).then(function () {
+      return state.firmwareOtaUrl || "";
+    });
+  });
+}
+
+function publicFirmwareOtaFilename(info) {
+  return info && info.ota_filename ? info.ota_filename :
+    (state.firmwareOtaFilename || (DEVICE_ID + ".ota.bin"));
+}
+
+function installPublicFirmwareViaWebOta(info) {
+  info = info || selectedFirmwareInfo();
+  return getJsonQuietly(publicFirmwareManifestUrl(), function (d) {
+    if (!info || selectedFirmwareIsLatest()) setPublicFirmwareInfo(firmwareInfoFromPublicManifest(d));
+  }).then(function () {
+    info = info || selectedFirmwareInfo();
+    var targetVersion = info && info.latest_version ? info.latest_version : state.firmwareLatestVersion;
+    if (isSpecificFirmwareVersion(targetVersion)) {
+      state.firmwareInstallTargetVersion = targetVersion;
+    }
+  }).then(function () {
+    clearFirmwareWebOtaFallback();
+    state.firmwareInstallPostPending = false;
+    state.firmwareChecking = false;
+    state.firmwareUpdateState = "INSTALLING";
+    state.firmwareInstallStatus = state.firmwareInstallTargetVersion ?
+      "Uploading firmware " + state.firmwareInstallTargetVersion + "\u2026" :
+      "Uploading firmware update\u2026";
+    renderFirmwareUpdateStatus();
+    startFirmwareInstallRefresh();
+
+    var uploadStarted = false;
+    var uploadResponseReceived = false;
+    return ensurePublicFirmwareOtaUrl(info).then(function (otaUrl) {
+      if (!otaUrl) throw new Error("Firmware file is not available yet.");
+      return fetch(otaUrl, { cache: "no-store" });
+    }).then(function (response) {
+      if (!response.ok) throw new Error("Could not download firmware file (" + response.status + ").");
+      return response.blob();
+    }).then(function (blob) {
+      var filename = publicFirmwareOtaFilename(info);
+      var form = new FormData();
+      form.append("file", blob, filename);
+      uploadStarted = true;
+      return fetch("/update", { method: "POST", body: form });
+    }).then(function (response) {
+      uploadResponseReceived = true;
+      return response.text().catch(function () {
+        return "";
+      }).then(function (text) {
+        if (!response.ok) {
+          throw new Error("Device rejected firmware upload (" + response.status + ").");
+        }
+        if (/update failed/i.test(text)) {
+          throw new Error("Device reported that the firmware upload failed.");
+        }
+        waitForFirmwareRestart();
+        return true;
+      });
+    }).catch(function (err) {
+      if (uploadStarted && !uploadResponseReceived) {
+        waitForFirmwareRestart();
+        return true;
+      }
+      failPublicFirmwareUpload(err && err.message);
+      return false;
+    });
   });
 }
 
@@ -471,55 +549,21 @@ function failPublicFirmwareUpload(message) {
   showBanner(message || "Could not upload firmware update.", "error");
 }
 
-function installPublicFirmwareViaWebOta() {
-  clearFirmwareWebOtaFallback();
-  state.firmwareInstallPostPending = false;
-  state.firmwareChecking = false;
-  state.firmwareUpdateState = "INSTALLING";
-  state.firmwareInstallStatus = "Uploading firmware update\u2026";
-  renderFirmwareUpdateStatus();
-  startFirmwareInstallRefresh();
-
-  var uploadStarted = false;
-  var uploadResponseReceived = false;
-  return ensurePublicFirmwareOtaUrl().then(function (otaUrl) {
-    if (!otaUrl) throw new Error("Firmware file is not available yet.");
-    return fetch(otaUrl, { cache: "no-store" });
-  }).then(function (response) {
-    if (!response.ok) throw new Error("Could not download firmware file (" + response.status + ").");
-    return response.blob();
-  }).then(function (blob) {
-    var filename = state.firmwareOtaFilename || (DEVICE_ID + ".ota.bin");
-    var form = new FormData();
-    form.append("file", blob, filename);
-    uploadStarted = true;
-    return fetch("/update", { method: "POST", body: form });
-  }).then(function (response) {
-    uploadResponseReceived = true;
-    return response.text().catch(function () {
-      return "";
-    }).then(function (text) {
-      if (!response.ok) {
-        throw new Error("Device rejected firmware upload (" + response.status + ").");
-      }
-      if (/update failed/i.test(text)) {
-        throw new Error("Device reported that the firmware upload failed.");
-      }
-      waitForFirmwareRestart();
-      return true;
-    });
-  }).catch(function (err) {
-    if (uploadStarted && !uploadResponseReceived) {
-      waitForFirmwareRestart();
-      return true;
-    }
-    failPublicFirmwareUpload(err && err.message);
-    return false;
-  });
-}
-
 function postSwitch(name, on) {
   return post(entityPostUrls("switch", name, [], on ? "turn_on" : "turn_off"));
+}
+
+function coverArtHideExternalInputPostUrls(on) {
+  return entityPostUrls(
+    "switch",
+    entityName("screen_saver_hide_cover_art_external_input"),
+    entityObjectIds("screen_saver_hide_cover_art_external_input"),
+    on ? "turn_on" : "turn_off"
+  );
+}
+
+function postCoverArtHideExternalInput(on) {
+  return post(coverArtHideExternalInputPostUrls(on));
 }
 
 function postDeveloperExperimentalFeatures(on) {
@@ -642,18 +686,6 @@ function postClockBarTime(on) {
   );
 }
 
-var CLOCK_BAR_WEATHER_ICON_UNAVAILABLE =
-  "Clock bar weather icon setting is not available on this firmware. Update the device firmware, then reload this page.";
-
-function postClockBarWeatherIcon(on) {
-  postSwitchWithObjectIds(
-    entityName("screen_clock_bar_weather_icon"),
-    entityObjectIds("screen_clock_bar_weather_icon"),
-    on,
-    CLOCK_BAR_WEATHER_ICON_UNAVAILABLE
-  );
-}
-
 var NETWORK_STATUS_ICON_UNAVAILABLE =
   "Network status icon setting is not available on this firmware. Update the device firmware, then reload this page.";
 
@@ -706,6 +738,8 @@ var SCREEN_SCHEDULE_CLOCK_BRIGHTNESS_UNAVAILABLE =
   "The schedule clock brightness setting is not available on this firmware. Update the device firmware, then reload this page.";
 var AUTOMATIC_BRIGHTNESS_UNAVAILABLE =
   "Automatic brightness control is not available on this firmware. Update the device firmware, then reload this page.";
+var BRIGHTNESS_TIME_UNAVAILABLE =
+  "Manual brightness times are not available on this firmware. Update the device firmware, then reload this page.";
 
 function postAutomaticBrightnessEnabled(on) {
   postSwitchWithObjectIds(
@@ -713,6 +747,24 @@ function postAutomaticBrightnessEnabled(on) {
     entityObjectIds("screen_automatic_brightness"),
     on,
     AUTOMATIC_BRIGHTNESS_UNAVAILABLE
+  );
+}
+
+function postBrightnessDawnTime(value) {
+  postTextWithObjectIds(
+    entityName("screen_brightness_dawn_time"),
+    entityObjectIds("screen_brightness_dawn_time"),
+    normalizeTimeOfDay(value, state.brightnessDawnTime || "06:00"),
+    BRIGHTNESS_TIME_UNAVAILABLE
+  );
+}
+
+function postBrightnessDuskTime(value) {
+  postTextWithObjectIds(
+    entityName("screen_brightness_dusk_time"),
+    entityObjectIds("screen_brightness_dusk_time"),
+    normalizeTimeOfDay(value, state.brightnessDuskTime || "18:00"),
+    BRIGHTNESS_TIME_UNAVAILABLE
   );
 }
 
@@ -920,7 +972,7 @@ function loadInitialState(handleState, onLoaded) {
 }
 
 function refreshFirmwareVersion() {
-  var pending = 6;
+  var pending = 7;
   if (!state.firmwareVersion) {
     state.firmwareVersionRefreshPending = true;
     renderFirmwareVersion();
@@ -937,6 +989,9 @@ function refreshFirmwareVersion() {
   }).then(finishFirmwareVersionRefresh, finishFirmwareVersionRefresh);
   getJsonQuietly(publicFirmwareManifestUrl(), function (d) {
     setPublicFirmwareInfo(firmwareInfoFromPublicManifest(d));
+  }).then(finishFirmwareVersionRefresh, finishFirmwareVersionRefresh);
+  getJsonQuietly(publicFirmwareVersionsUrl(), function (d) {
+    setPublicFirmwareVersions(firmwareInfosFromPublicVersions(d));
   }).then(finishFirmwareVersionRefresh, finishFirmwareVersionRefresh);
   getJsonFirst(entityDetailPaths("text_sensor", entityLookupNames("firmware_version")), function (d) {
     setFirmwareVersion(d.state || d.value);

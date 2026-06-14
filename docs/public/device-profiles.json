@@ -95,6 +95,25 @@
       "rotation": true,
       "ethernetManualInstall": false,
       "subpages": true
+    },
+    {
+      "slug": "crowpanel-5inch",
+      "installSlug": "crowpanel-5inch",
+      "name": "CrowPanel 5 inch",
+      "docsPath": "/screens/crowpanel-5inch",
+      "screenSize": "5 inches",
+      "resolution": "800 x 480",
+      "orientation": "Landscape",
+      "slots": 15,
+      "grid": {
+        "rows": 3,
+        "cols": 5
+      },
+      "chipFamily": "ESP32-S3",
+      "relays": 0,
+      "rotation": true,
+      "ethernetManualInstall": false,
+      "subpages": true
     }
   ]
 }

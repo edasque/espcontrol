@@ -198,8 +198,10 @@ def validate_display(slug: str, device: dict[str, Any], errors: list[str]) -> No
             errors.append(device_error(slug, f"firmware.display.{key} must be a number when set"))
     if "imageCardDownloaders" in display:
         value = display["imageCardDownloaders"]
-        if not isinstance(value, int) or isinstance(value, bool) or value < 1 or value > 6:
-            errors.append(device_error(slug, "firmware.display.imageCardDownloaders must be an integer from 1 to 6 when set"))
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0 or value > 6:
+            errors.append(device_error(slug, "firmware.display.imageCardDownloaders must be an integer from 0 to 6 when set"))
+    if "imageCardDiagnostics" in display and not isinstance(display["imageCardDiagnostics"], bool):
+        errors.append(device_error(slug, "firmware.display.imageCardDiagnostics must be true or false when set"))
 
     correction = display.get("colorCorrection")
     if correction is not None:
@@ -518,18 +520,24 @@ def web_config(profile: dict[str, Any]) -> dict[str, Any]:
     layout = profile["layout"]
     features = web_features(profile)
     display = profile["firmware"].get("display") or {}
+    image_card_limit = display.get("imageCardDownloaders", 4)
     cfg: dict[str, Any] = {
         "slots": profile["slots"],
         "cols": layout["cols"],
         "rows": layout["rows"],
         "screenSize": profile["public"]["screenSize"],
         "largeSensorUnitOffsetPercent": profile["settings"]["largeSensorUnitOffsetPercent"],
-        "imageCardLimit": display.get("imageCardDownloaders", 4),
+        "imageCardLimit": image_card_limit,
     }
     for key, value in profile["web"].items():
         cfg[key] = copy.deepcopy(value)
         if key == "dragAnimation" and features:
             cfg["features"] = copy.deepcopy(features)
+    if image_card_limit == 0:
+        disabled = list(cfg.get("disabledCardTypes") or [])
+        if "image" not in disabled:
+            disabled.append("image")
+        cfg["disabledCardTypes"] = disabled
     if features and "features" not in cfg:
         cfg["features"] = copy.deepcopy(features)
     return cfg
@@ -584,6 +592,8 @@ def slot_device(profile: dict[str, Any]) -> dict[str, Any]:
         }
     if display.get("imageCardDownloaders", 4) != 4:
         slot["image_card_downloaders"] = display["imageCardDownloaders"]
+    if display.get("imageCardDiagnostics"):
+        slot["image_card_diagnostics"] = True
     if rotation.get("rotateWidthCompensation"):
         slot["rotate_width_compensation"] = True
     return slot

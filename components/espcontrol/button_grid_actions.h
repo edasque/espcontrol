@@ -525,10 +525,10 @@ inline void handle_button_click(const std::string &cfg, int slot_num,
     FanCardCtx *ctx = (FanCardCtx *)lv_obj_get_user_data(btn_obj);
     if (ctx) fan_card_handle_click(ctx);
   } else if (p.type == "garage") {
-    if (garage_card_show_status(p)) {
-      return;
-    } else if (garage_command_mode(p.sensor)) {
+    if (garage_command_mode(p.sensor)) {
       send_cover_command_action(p);
+    } else if (garage_card_show_status(p)) {
+      return;
     } else if (!p.entity.empty()) {
       set_card_checked_state(btn_obj, true);
       send_toggle_action(p.entity);

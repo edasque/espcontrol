@@ -1218,7 +1218,6 @@ var CARD_CONTRACT_CARDS = {
   "image": {
     "label": "Camera Card",
     "allowInSubpage": true,
-    "experimental": "developer",
     "domains": [
       "camera",
       "image"

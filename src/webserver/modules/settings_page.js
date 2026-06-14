@@ -26,6 +26,21 @@ function coverArtTrackOverlayDurationSupported() {
   return !!(CFG && CFG.coverArtSquareOverlay);
 }
 
+function infoPanel(id, text) {
+  var panel = document.createElement("div");
+  panel.className = "sp-info-panel";
+  panel.id = id;
+  panel.setAttribute("role", "note");
+  var icon = document.createElement("span");
+  icon.className = "mdi mdi-information-outline";
+  icon.setAttribute("aria-hidden", "true");
+  var message = document.createElement("span");
+  message.textContent = text;
+  panel.appendChild(icon);
+  panel.appendChild(message);
+  return panel;
+}
+
 function buildSettingsPage(parent) {
   var page = document.createElement("div");
   page.id = "sp-settings";
@@ -124,6 +139,25 @@ function buildSettingsPage(parent) {
     syncScreenScheduleUi();
   });
 
+  var brightnessManualTimes = condField();
+  var dawnTime = createTimeInput("Dawn", "sp-set-brightness-dawn-time", state.brightnessDawnTime, "06:00", function (value) {
+    state.brightnessDawnTime = normalizeTimeOfDay(value, "06:00");
+    postBrightnessDawnTime(state.brightnessDawnTime);
+    syncScreenScheduleUi();
+  });
+  brightnessManualTimes.appendChild(dawnTime.wrap);
+  els.setBrightnessDawnTime = dawnTime.input;
+
+  var duskTime = createTimeInput("Dusk", "sp-set-brightness-dusk-time", state.brightnessDuskTime, "18:00", function (value) {
+    state.brightnessDuskTime = normalizeTimeOfDay(value, "18:00");
+    postBrightnessDuskTime(state.brightnessDuskTime);
+    syncScreenScheduleUi();
+  });
+  brightnessManualTimes.appendChild(duskTime.wrap);
+  els.setBrightnessDuskTime = duskTime.input;
+  blBody.appendChild(brightnessManualTimes);
+  els.setBrightnessManualTimes = brightnessManualTimes;
+
   var sunInfo = document.createElement("div");
   sunInfo.className = "sp-sun-info";
   sunInfo.id = "sp-sun-info";
@@ -134,6 +168,10 @@ function buildSettingsPage(parent) {
   var backlightCard = makeCollapsibleCard("Backlight", blBody, true);
 
   var scheduleBody = document.createElement("div");
+  scheduleBody.appendChild(infoPanel(
+    "sp-night-schedule-info",
+    "Time-based Night Schedule overrides screensaver presence wake and Media Cover Art while it is active. Use Sensor mode when you want presence to control the night schedule."
+  ));
   scheduleBody.appendChild(fieldLabel("Mode"));
   var scheduleSegment = document.createElement("div");
   scheduleSegment.className = "sp-segment sp-screensaver-mode";
@@ -568,23 +606,13 @@ function buildSettingsPage(parent) {
   els.setClockBrightnessNightVal = timerClockControls.clockBrightnessNightVal;
   els.setClockBrightnessField = timerClockControls.brightnessField;
 
-  function addMediaPlayerSleepPreventionToggle(parent, inputId) {
-    var mediaPlayerToggle = toggleRow(
-      "Override for Media Cover Art",
-      inputId,
-      state.mediaPlayerSleepPreventionOn);
-    parent.appendChild(mediaPlayerToggle.row);
-    mediaPlayerToggle.input.addEventListener("change", function () {
-      state.mediaPlayerSleepPreventionOn = this.checked;
-      syncMediaPlayerSleepPreventionUi();
-      postSwitch(entityName("screen_saver_media_player_sleep_prevention"), state.mediaPlayerSleepPreventionOn);
-    });
-    return mediaPlayerToggle.input;
-  }
-  els.setMediaPlayerSleepPreventionToggle = addMediaPlayerSleepPreventionToggle(timerPanel, "sp-set-ss-media-player-enable");
-
   var coverArtBody = document.createElement("div");
   if (!isEpaperPreview()) {
+    coverArtBody.appendChild(infoPanel(
+      "sp-cover-art-info",
+      "Media Cover Art overrides existing screensaver settings while the selected media player is playing."
+    ));
+
     var coverArtToggle = toggleRow(
       "Show Cover Art",
       "sp-set-ss-cover-art-enable",
@@ -592,12 +620,31 @@ function buildSettingsPage(parent) {
     coverArtBody.appendChild(coverArtToggle.row);
     coverArtToggle.input.addEventListener("change", function () {
       state.coverArtScreensaverOn = this.checked;
+      if (!state.coverArtScreensaverOn && state.mediaPlayerSleepPreventionOn) {
+        state.mediaPlayerSleepPreventionOn = false;
+        syncMediaPlayerSleepPreventionUi();
+        postSwitch(entityName("screen_saver_media_player_sleep_prevention"), false);
+      }
       syncCoverArtScreensaverUi();
       postSwitch(entityName("screen_saver_cover_art"), state.coverArtScreensaverOn);
     });
     els.setCoverArtToggle = coverArtToggle.input;
 
+    var sleepPreventionToggle = toggleRow(
+      "Keep Screen Awake During Playback",
+      "sp-set-ss-media-sleep-prevention",
+      state.mediaPlayerSleepPreventionOn);
+    coverArtBody.appendChild(sleepPreventionToggle.row);
+    sleepPreventionToggle.input.addEventListener("change", function () {
+      state.mediaPlayerSleepPreventionOn = this.checked;
+      syncMediaPlayerSleepPreventionUi();
+      syncCoverArtScreensaverUi();
+      postSwitch(entityName("screen_saver_media_player_sleep_prevention"), state.mediaPlayerSleepPreventionOn);
+    });
+    els.setMediaPlayerSleepPreventionToggle = sleepPreventionToggle.input;
+
     var coverArtOptions = condField();
+    var coverArtOnlyOptions = condField();
 
     var coverArtEntityField = document.createElement("div");
     coverArtEntityField.className = "sp-field";
@@ -614,6 +661,23 @@ function buildSettingsPage(parent) {
     });
     els.setCoverArtMediaPlayer = coverArtEntityInp;
 
+    var coverArtConditionsField = document.createElement("div");
+    coverArtConditionsField.className = "sp-field";
+    coverArtConditionsField.appendChild(fieldLabel("Only Show When", "sp-set-ss-cover-art-conditions"));
+    var coverArtConditionsInp = document.createElement("input");
+    coverArtConditionsInp.className = "sp-input";
+    coverArtConditionsInp.id = "sp-set-ss-cover-art-conditions";
+    coverArtConditionsInp.type = "text";
+    coverArtConditionsInp.maxLength = 240;
+    coverArtConditionsInp.placeholder = "app_id=com.apple.TVMusic; media_content_type=music";
+    coverArtConditionsInp.value = state.coverArtAttributeConditions || "";
+    coverArtConditionsField.appendChild(coverArtConditionsInp);
+    coverArtOptions.appendChild(coverArtConditionsField);
+    bindTextPost(coverArtConditionsInp, entityName("screen_saver_cover_art_conditions"), {
+      onBlur: function (value) { state.coverArtAttributeConditions = value; },
+    });
+    els.setCoverArtConditions = coverArtConditionsInp;
+
     var coverArtDelayField = document.createElement("div");
     coverArtDelayField.className = "sp-field";
     coverArtDelayField.appendChild(fieldLabel("Show After", "sp-set-ss-cover-art-delay"));
@@ -621,6 +685,7 @@ function buildSettingsPage(parent) {
     coverArtDelaySelect.className = "sp-select";
     coverArtDelaySelect.id = "sp-set-ss-cover-art-delay";
     [
+      { label: "Immediately", value: 0 },
       { label: "5 seconds", value: 5 },
       { label: "10 seconds", value: 10 },
       { label: "30 seconds", value: 30 },
@@ -637,7 +702,7 @@ function buildSettingsPage(parent) {
       postNumber(entityName("screen_saver_cover_art_delay"), state.coverArtDelay);
     });
     coverArtDelayField.appendChild(coverArtDelaySelect);
-    coverArtOptions.appendChild(coverArtDelayField);
+    coverArtOnlyOptions.appendChild(coverArtDelayField);
     els.setCoverArtDelay = coverArtDelaySelect;
 
     if (coverArtTrackOverlayDurationSupported()) {
@@ -648,12 +713,15 @@ function buildSettingsPage(parent) {
       trackOverlaySelect.className = "sp-select";
       trackOverlaySelect.id = "sp-set-ss-track-overlay";
       [
-        { label: "Hidden", value: 0 },
+        { label: "Never", value: 0 },
         { label: "3 seconds", value: 3 },
         { label: "5 seconds", value: 5 },
         { label: "10 seconds", value: 10 },
+        { label: "15 seconds", value: 15 },
+        { label: "20 seconds", value: 20 },
         { label: "30 seconds", value: 30 },
-        { label: "1 minute", value: 60 },
+        { label: "60 seconds", value: 60 },
+        { label: "Always", value: -1 },
       ].forEach(function (opt) {
         var o = document.createElement("option");
         o.value = opt.value;
@@ -665,7 +733,7 @@ function buildSettingsPage(parent) {
         postNumber(entityName("screen_saver_track_overlay_duration"), state.coverArtTrackOverlayDuration);
       });
       trackOverlayField.appendChild(trackOverlaySelect);
-      coverArtOptions.appendChild(trackOverlayField);
+      coverArtOnlyOptions.appendChild(trackOverlayField);
       els.setCoverArtTrackOverlayDuration = trackOverlaySelect;
     }
 
@@ -676,10 +744,12 @@ function buildSettingsPage(parent) {
     coverArtOptions.appendChild(coverArtHideExternalInputToggle.row);
     coverArtHideExternalInputToggle.input.addEventListener("change", function () {
       state.coverArtHideExternalInputOn = this.checked;
-      postSwitch(entityName("screen_saver_hide_cover_art_external_input"), state.coverArtHideExternalInputOn);
+      postCoverArtHideExternalInput(state.coverArtHideExternalInputOn);
     });
     els.setCoverArtHideExternalInputToggle = coverArtHideExternalInputToggle.input;
 
+    els.setCoverArtOnlyOptions = coverArtOnlyOptions;
+    coverArtOptions.appendChild(coverArtOnlyOptions);
 
     els.setCoverArtOptions = coverArtOptions;
     coverArtBody.appendChild(coverArtOptions);
@@ -701,7 +771,6 @@ function buildSettingsPage(parent) {
   sensorPanel.appendChild(sensorClockControls.clockField);
   sensorPanel.appendChild(sensorClockControls.dimBrightnessField);
   sensorPanel.appendChild(sensorClockControls.brightnessField);
-  els.setSensorMediaPlayerSleepPreventionToggle = addMediaPlayerSleepPreventionToggle(sensorPanel, "sp-set-sensor-media-player-enable");
   ssBody.appendChild(sensorPanel);
   els.setPresence = presInp;
   els.setSensorClockSelect = sensorClockControls.clockSelect;
@@ -843,21 +912,31 @@ function buildSettingsPage(parent) {
   fwCheckBtn.addEventListener("click", function () {
     if (!firmwareUpdateControlsVisible()) return;
     if (firmwareInstallAvailable()) {
-      var updateReady = firmwareUpdateAvailable();
-      state.firmwareInstallTargetVersion = state.firmwareLatestVersion;
-      state.firmwareInstallPostPending = !updateReady;
-      state.firmwareUpdateState = "INSTALLING";
-      state.firmwareInstallStatus = updateReady ? "Installing update\u2026" : "Checking update before install\u2026";
+      var selectedInfo = selectedFirmwareInfo();
+      var installingLatest = selectedFirmwareIsLatest();
+      var updateReady = installingLatest && firmwareUpdateAvailable();
+      state.firmwareInstallTargetVersion = selectedInfo && selectedInfo.latest_version ?
+        selectedInfo.latest_version :
+        state.firmwareLatestVersion;
+      state.firmwareInstallPostPending = installingLatest && !updateReady;
       state.firmwareChecking = false;
-      renderFirmwareUpdateStatus();
       if (updateReady) {
+        state.firmwareUpdateState = "INSTALLING";
+        state.firmwareInstallStatus = "Installing update\u2026";
+        renderFirmwareUpdateStatus();
         clearFirmwareWebOtaFallback();
         postFirmwareUpdateInstall();
-      } else {
+        startFirmwareInstallRefresh();
+      } else if (installingLatest) {
+        state.firmwareUpdateState = "INSTALLING";
+        state.firmwareInstallStatus = "Checking update before install\u2026";
+        renderFirmwareUpdateStatus();
         postFirmwareUpdateCheck();
         scheduleFirmwareWebOtaFallback();
+        startFirmwareInstallRefresh();
+      } else {
+        installPublicFirmwareViaWebOta(selectedInfo);
       }
-      startFirmwareInstallRefresh();
       return;
     }
     state.firmwareChecking = true;
@@ -865,6 +944,9 @@ function buildSettingsPage(parent) {
     postFirmwareUpdateCheck();
     getJsonQuietly(publicFirmwareManifestUrl(), function (d) {
       setPublicFirmwareInfo(firmwareInfoFromPublicManifest(d));
+    });
+    getJsonQuietly(publicFirmwareVersionsUrl(), function (d) {
+      setPublicFirmwareVersions(firmwareInfosFromPublicVersions(d));
     });
     setTimeout(function () {
       state.firmwareChecking = false;
@@ -882,6 +964,23 @@ function buildSettingsPage(parent) {
   fwBody.appendChild(fwStatus);
   els.fwStatus = fwStatus;
   renderFirmwareUpdateStatus();
+
+  var fwVersionField = document.createElement("div");
+  fwVersionField.className = "sp-field sp-fw-version-field";
+  fwVersionField.style.display = "none";
+  fwVersionField.appendChild(fieldLabel("Install Version", "sp-set-firmware-version"));
+  var fwVersionSelect = document.createElement("select");
+  fwVersionSelect.className = "sp-select";
+  fwVersionSelect.id = "sp-set-firmware-version";
+  fwVersionSelect.addEventListener("change", function () {
+    state.firmwareSelectedVersion = this.value;
+    renderFirmwareUpdateStatus();
+  });
+  fwVersionField.appendChild(fwVersionSelect);
+  fwBody.appendChild(fwVersionField);
+  els.fwVersionField = fwVersionField;
+  els.fwVersionSelect = fwVersionSelect;
+  syncFirmwareVersionSelect();
 
   var autoUpdateToggle = toggleRow("Auto Update", "sp-set-auto-update", state.autoUpdate);
   fwBody.appendChild(autoUpdateToggle.row);
@@ -1025,28 +1124,35 @@ function syncCoverArtScreensaverUi() {
     els.setCoverArtToggle.checked = !!state.coverArtScreensaverOn;
   }
   if (els.setCoverArtOptions) {
-    els.setCoverArtOptions.classList.toggle("sp-visible", !!state.coverArtScreensaverOn);
+    els.setCoverArtOptions.classList.toggle(
+      "sp-visible",
+      !!state.coverArtScreensaverOn || !!state.mediaPlayerSleepPreventionOn);
+  }
+  if (els.setCoverArtOnlyOptions) {
+    els.setCoverArtOnlyOptions.classList.toggle("sp-visible", !!state.coverArtScreensaverOn);
   }
   if (els.setCoverArtBadge) {
     els.setCoverArtBadge.className = "sp-card-badge" + (state.coverArtScreensaverOn ? "" : " sp-hidden");
   }
   if (els.setCoverArtDelay) {
-    if (state.coverArtDelay < 5) {
-      state.coverArtDelay = 10;
-      postNumber(entityName("screen_saver_cover_art_delay"), state.coverArtDelay);
-    }
-    setSelectValue(els.setCoverArtDelay, state.coverArtDelay, formatDuration(state.coverArtDelay));
+    var coverArtDelay = Math.max(0, parseFloat(state.coverArtDelay) || 0);
+    state.coverArtDelay = coverArtDelay;
+    setSelectValue(
+      els.setCoverArtDelay,
+      coverArtDelay,
+      coverArtDelay > 0 ? formatDuration(coverArtDelay) : "Immediately");
   }
   if (els.setCoverArtTrackOverlayDuration) {
     var value = state.coverArtTrackOverlayDuration;
     setSelectValue(
       els.setCoverArtTrackOverlayDuration,
       value,
-      value > 0 ? formatDuration(value) : "Hidden");
+      value < 0 ? "Always" : value > 0 ? formatDuration(value) : "Never");
   }
   if (els.setCoverArtHideExternalInputToggle) {
     els.setCoverArtHideExternalInputToggle.checked = !!state.coverArtHideExternalInputOn;
   }
+  syncInput(els.setCoverArtConditions, state.coverArtAttributeConditions || "");
 }
 
 function syncOptionalClockBrightness(field, previousField, display) {
@@ -1145,6 +1251,25 @@ function createHourSelect(label, id, initial, onChange) {
   });
   wrap.appendChild(select);
   return { wrap: wrap, select: select };
+}
+
+function createTimeInput(label, id, initial, fallback, onChange) {
+  var wrap = document.createElement("div");
+  wrap.className = "sp-field";
+  wrap.appendChild(fieldLabel(label, id));
+  var input = document.createElement("input");
+  input.type = "time";
+  input.className = "sp-input";
+  input.id = id;
+  input.step = "60";
+  input.value = normalizeTimeOfDay(initial, fallback);
+  input.addEventListener("change", function () {
+    var value = normalizeTimeOfDay(this.value, fallback);
+    this.value = value;
+    onChange(value);
+  });
+  wrap.appendChild(input);
+  return { wrap: wrap, input: input };
 }
 
 function createEntityToggleSection(label, id, checked, switchName, entityLabel, entityPostName, placeholder) {

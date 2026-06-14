@@ -51,32 +51,38 @@ script:
           cfg.subpage_chevron_font = id(font_icon_status)->get_lv_font();
           cfg.climate_option_title_font = id(font_text_body)->get_lv_font();
           cfg.climate_option_value_font = id(font_text_small)->get_lv_font();
-          cfg.tiny_font = id(font_text_tiny)->get_lv_font();
           cfg.temperature_unit = id(temperature_unit_select).current_option();
           cfg.timezone = id(timezone_select).current_option();
-          cfg.pause_home_idle = []() {
-            id(home_screen_idle_suspended) = true;
-            id(home_screen_idle_check).stop();
+          cfg.suspend_display_takeover = []() {
+            id(display_takeover_suspended) = true;
+            id(screensaver_idle_check).stop();
+            id(screensaver_sleep_timer).stop();
+            id(screensaver_sleep_sensor).stop();
+            id(screensaver_sleep_display_off).stop();
+            id(backlight_sleep_display_off).stop();
+            id(backlight_fade_current_ui_to_black).stop();
+            id(backlight_schedule_display_off).stop();
+            id(show_clock_view).stop();
+            id(show_dimmed_view).stop();
+            id(clock_screensaver_refresh_brightness).stop();
+            id(screensaver_dimmed_refresh_brightness).stop();
+            id(display_asleep) = false;
+            id(screensaver_display_off_active) = false;
+            id(screensaver_dimmed_active) = false;
+            lv_obj_add_flag(id(dim_screensaver_touch_guard), LV_OBJ_FLAG_HIDDEN);
+            id(backlight_apply_brightness).execute();
           };
-          cfg.resume_home_idle = []() {
-            id(home_screen_idle_suspended) = false;
+          cfg.resume_display_takeover = []() {
+            id(display_takeover_suspended) = false;
+            if (id(screensaver_sensor_sleep_pending) &&
+                id(screensaver_mode).state == "sensor" &&
+                !id(presence_detected)) {
+              id(screensaver_sleep_sensor).execute();
+              return;
+            }
             id(home_screen_idle_check).execute();
+            id(screensaver_idle_check).execute();
           };
-          static esphome::artwork_image::ArtworkImage *image_card_downloaders[] = {
-            id(image_card_download_1),
-            id(image_card_download_2),
-            id(image_card_download_3),
-            id(image_card_download_4),
-          };
-          static esphome::artwork_image::ArtworkImage *image_card_modal_downloaders[] = {
-            id(image_card_modal_download_1),
-            id(image_card_modal_download_2),
-            id(image_card_modal_download_3),
-            id(image_card_modal_download_4),
-          };
-          cfg.image_card_images = image_card_downloaders;
-          cfg.image_card_modal_images = image_card_modal_downloaders;
-          cfg.image_card_image_count = 4;
           cfg.home_assistant_base_url = []() {
             std::string base = id(cover_art_home_assistant_base_url);
             while (!base.empty() && base.back() == '/') base.pop_back();
@@ -100,12 +106,18 @@ script:
           set_width_compensation_vertical_axis(cfg.width_compensation_vertical);
           apply_width_compensation(id(display_time), cfg.width_compensation_percent);
           apply_width_compensation(id(temperatures), cfg.width_compensation_percent);
+          apply_width_compensation(id(temperature_2), cfg.width_compensation_percent);
+          apply_width_compensation(id(temperature_3), cfg.width_compensation_percent);
+          apply_width_compensation(id(temperature_4), cfg.width_compensation_percent);
+          apply_width_compensation(id(temperature_5), cfg.width_compensation_percent);
+          apply_width_compensation(id(temperature_6), cfg.width_compensation_percent);
           apply_width_compensation(id(clock_label), cfg.width_compensation_percent);
           // END GENERATED REFRESH GRID WIRING
           grid_refresh_layout(slots, cfg,
             id(button_order).state,
             id(main_page)->obj);
       - script.execute: clock_bar_apply
+
 esphome:
   on_boot:
     - priority: -100
@@ -145,32 +157,38 @@ esphome:
             cfg.subpage_chevron_font = id(font_icon_status)->get_lv_font();
             cfg.climate_option_title_font = id(font_text_body)->get_lv_font();
             cfg.climate_option_value_font = id(font_text_small)->get_lv_font();
-            cfg.tiny_font = id(font_text_tiny)->get_lv_font();
             cfg.temperature_unit = id(temperature_unit_select).current_option();
             cfg.timezone = id(timezone_select).current_option();
-            cfg.pause_home_idle = []() {
-              id(home_screen_idle_suspended) = true;
-              id(home_screen_idle_check).stop();
+            cfg.suspend_display_takeover = []() {
+              id(display_takeover_suspended) = true;
+              id(screensaver_idle_check).stop();
+              id(screensaver_sleep_timer).stop();
+              id(screensaver_sleep_sensor).stop();
+              id(screensaver_sleep_display_off).stop();
+              id(backlight_sleep_display_off).stop();
+              id(backlight_fade_current_ui_to_black).stop();
+              id(backlight_schedule_display_off).stop();
+              id(show_clock_view).stop();
+              id(show_dimmed_view).stop();
+              id(clock_screensaver_refresh_brightness).stop();
+              id(screensaver_dimmed_refresh_brightness).stop();
+              id(display_asleep) = false;
+              id(screensaver_display_off_active) = false;
+              id(screensaver_dimmed_active) = false;
+              lv_obj_add_flag(id(dim_screensaver_touch_guard), LV_OBJ_FLAG_HIDDEN);
+              id(backlight_apply_brightness).execute();
             };
-            cfg.resume_home_idle = []() {
-              id(home_screen_idle_suspended) = false;
+            cfg.resume_display_takeover = []() {
+              id(display_takeover_suspended) = false;
+              if (id(screensaver_sensor_sleep_pending) &&
+                  id(screensaver_mode).state == "sensor" &&
+                  !id(presence_detected)) {
+                id(screensaver_sleep_sensor).execute();
+                return;
+              }
               id(home_screen_idle_check).execute();
+              id(screensaver_idle_check).execute();
             };
-            static esphome::artwork_image::ArtworkImage *image_card_downloaders[] = {
-              id(image_card_download_1),
-              id(image_card_download_2),
-              id(image_card_download_3),
-              id(image_card_download_4),
-            };
-            static esphome::artwork_image::ArtworkImage *image_card_modal_downloaders[] = {
-              id(image_card_modal_download_1),
-              id(image_card_modal_download_2),
-              id(image_card_modal_download_3),
-              id(image_card_modal_download_4),
-            };
-            cfg.image_card_images = image_card_downloaders;
-            cfg.image_card_modal_images = image_card_modal_downloaders;
-            cfg.image_card_image_count = 4;
             cfg.home_assistant_base_url = []() {
               std::string base = id(cover_art_home_assistant_base_url);
               while (!base.empty() && base.back() == '/') base.pop_back();
@@ -194,6 +212,11 @@ esphome:
             set_width_compensation_vertical_axis(cfg.width_compensation_vertical);
             apply_width_compensation(id(display_time), cfg.width_compensation_percent);
             apply_width_compensation(id(temperatures), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_2), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_3), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_4), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_5), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_6), cfg.width_compensation_percent);
             apply_width_compensation(id(clock_label), cfg.width_compensation_percent);
             // END GENERATED PHASE 1 GRID WIRING
             grid_phase1(slots, cfg,
@@ -267,32 +290,38 @@ esphome:
             cfg.subpage_chevron_font = id(font_icon_status)->get_lv_font();
             cfg.climate_option_title_font = id(font_text_body)->get_lv_font();
             cfg.climate_option_value_font = id(font_text_small)->get_lv_font();
-            cfg.tiny_font = id(font_text_tiny)->get_lv_font();
             cfg.temperature_unit = id(temperature_unit_select).current_option();
             cfg.timezone = id(timezone_select).current_option();
-            cfg.pause_home_idle = []() {
-              id(home_screen_idle_suspended) = true;
-              id(home_screen_idle_check).stop();
+            cfg.suspend_display_takeover = []() {
+              id(display_takeover_suspended) = true;
+              id(screensaver_idle_check).stop();
+              id(screensaver_sleep_timer).stop();
+              id(screensaver_sleep_sensor).stop();
+              id(screensaver_sleep_display_off).stop();
+              id(backlight_sleep_display_off).stop();
+              id(backlight_fade_current_ui_to_black).stop();
+              id(backlight_schedule_display_off).stop();
+              id(show_clock_view).stop();
+              id(show_dimmed_view).stop();
+              id(clock_screensaver_refresh_brightness).stop();
+              id(screensaver_dimmed_refresh_brightness).stop();
+              id(display_asleep) = false;
+              id(screensaver_display_off_active) = false;
+              id(screensaver_dimmed_active) = false;
+              lv_obj_add_flag(id(dim_screensaver_touch_guard), LV_OBJ_FLAG_HIDDEN);
+              id(backlight_apply_brightness).execute();
             };
-            cfg.resume_home_idle = []() {
-              id(home_screen_idle_suspended) = false;
+            cfg.resume_display_takeover = []() {
+              id(display_takeover_suspended) = false;
+              if (id(screensaver_sensor_sleep_pending) &&
+                  id(screensaver_mode).state == "sensor" &&
+                  !id(presence_detected)) {
+                id(screensaver_sleep_sensor).execute();
+                return;
+              }
               id(home_screen_idle_check).execute();
+              id(screensaver_idle_check).execute();
             };
-            static esphome::artwork_image::ArtworkImage *image_card_downloaders[] = {
-              id(image_card_download_1),
-              id(image_card_download_2),
-              id(image_card_download_3),
-              id(image_card_download_4),
-            };
-            static esphome::artwork_image::ArtworkImage *image_card_modal_downloaders[] = {
-              id(image_card_modal_download_1),
-              id(image_card_modal_download_2),
-              id(image_card_modal_download_3),
-              id(image_card_modal_download_4),
-            };
-            cfg.image_card_images = image_card_downloaders;
-            cfg.image_card_modal_images = image_card_modal_downloaders;
-            cfg.image_card_image_count = 4;
             cfg.home_assistant_base_url = []() {
               std::string base = id(cover_art_home_assistant_base_url);
               while (!base.empty() && base.back() == '/') base.pop_back();
@@ -316,6 +345,11 @@ esphome:
             set_width_compensation_vertical_axis(cfg.width_compensation_vertical);
             apply_width_compensation(id(display_time), cfg.width_compensation_percent);
             apply_width_compensation(id(temperatures), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_2), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_3), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_4), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_5), cfg.width_compensation_percent);
+            apply_width_compensation(id(temperature_6), cfg.width_compensation_percent);
             apply_width_compensation(id(clock_label), cfg.width_compensation_percent);
             // END GENERATED PHASE 2 GRID WIRING
             grid_phase2(slots, cfg, sp_cfgs, sp_ext, sp_ext2, sp_ext3,
@@ -349,15 +383,26 @@ esphome:
               id(cover_art_media_player_entity).state,
               &id(media_player_playing),
               []() {
-                return id(clock_bar_enabled).state &&
-                       clock_bar_active_on_button_grid_page(id(main_page)->obj) &&
-                       !id(screensaver_display_off_active) &&
-                       !id(is_clock_showing) &&
-                       !id(cover_art_screensaver_active);
+                return clock_bar_should_show(
+                    id(clock_bar_enabled).state,
+                    id(main_page)->obj,
+                    id(display_asleep),
+                    id(screen_schedule_asleep),
+                    id(is_clock_showing),
+                    id(cover_art_screensaver_active),
+                    id(screensaver_display_off_active),
+                    id(screensaver_dimmed_active));
               },
               []() {
                 id(screensaver_presence_wake).execute();
               },
               []() {
                 id(screensaver_presence_sleep).execute();
+              },
+              []() {
+                return id(outdoor_temp_enable).state;
               });
+        - delay: 500ms
+        - script.execute: refresh_button_grid
+        - delay: 1500ms
+        - script.execute: refresh_button_grid

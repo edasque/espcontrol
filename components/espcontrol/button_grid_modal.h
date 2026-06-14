@@ -35,6 +35,7 @@ struct ControlModalActive {
   ControlModalKind kind = ControlModalKind::NONE;
   lv_obj_t *overlay = nullptr;
   ControlModalCloseCallback close_callback = nullptr;
+  uint32_t close_guard_until_ms = 0;
   bool closing = false;
 };
 
@@ -65,18 +66,39 @@ inline void control_modal_set_active(ControlModalKind kind, lv_obj_t *overlay,
   active.kind = kind;
   active.overlay = overlay;
   active.close_callback = close_callback;
+  active.close_guard_until_ms = 0;
   active.closing = false;
 }
 
-inline void control_modal_close_active() {
+inline bool control_modal_close_guard_active(const ControlModalActive &active) {
+  return active.close_guard_until_ms != 0 &&
+         (int32_t)(lv_tick_get() - active.close_guard_until_ms) < 0;
+}
+
+inline void control_modal_block_close_for(uint32_t delay_ms) {
+  ControlModalActive &active = control_modal_active();
+  if (active.kind == ControlModalKind::NONE || delay_ms == 0) return;
+  active.close_guard_until_ms = lv_tick_get() + delay_ms;
+}
+
+inline void control_modal_close_active_internal(bool honor_close_guard) {
   ControlModalActive &active = control_modal_active();
   if (active.kind == ControlModalKind::NONE || active.closing) return;
+  if (honor_close_guard && control_modal_close_guard_active(active)) return;
 
   ControlModalKind closing_kind = active.kind;
   void (*close_callback)() = active.close_callback;
   active.closing = true;
   if (close_callback) close_callback();
   if (control_modal_active().kind == closing_kind) control_modal_reset_active();
+}
+
+inline void control_modal_close_active() {
+  control_modal_close_active_internal(true);
+}
+
+inline void control_modal_force_close_active() {
+  control_modal_close_active_internal(false);
 }
 
 struct ControlModalGridMetrics {
@@ -387,6 +409,7 @@ inline lv_obj_t *control_modal_create_round_button(lv_obj_t *parent, lv_coord_t 
                                                   uint32_t bg_color,
                                                   int width_compensation_percent = 100) {
   lv_obj_t *btn = lv_btn_create(parent);
+  if (!btn) return nullptr;
   lv_obj_set_size(btn, size, size);
   apply_width_compensation(btn, width_compensation_percent);
   lv_obj_set_style_radius(btn, size / 2, LV_PART_MAIN);
@@ -397,6 +420,10 @@ inline lv_obj_t *control_modal_create_round_button(lv_obj_t *parent, lv_coord_t 
   lv_obj_set_style_shadow_width(btn, 0, LV_PART_MAIN);
   control_modal_apply_pressed_fill(btn);
   lv_obj_t *label = lv_label_create(btn);
+  if (!label) {
+    lv_obj_del(btn);
+    return nullptr;
+  }
   lv_label_set_text(label, text);
   lv_obj_set_style_text_color(label, lv_color_hex(DARK_TEXT_PRIMARY), LV_PART_MAIN);
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -442,9 +469,19 @@ inline ControlModalShell control_modal_open_shell(ControlModalKind kind,
   if (shell.content_w < 120) shell.content_w = shell.layout.panel_w;
 
   shell.overlay = lv_obj_create(lv_layer_top());
+  if (!shell.overlay) {
+    ESP_LOGW("control_modal", "Unable to create modal overlay");
+    return shell;
+  }
   control_modal_style_overlay(shell.overlay);
 
   shell.panel = lv_obj_create(shell.overlay);
+  if (!shell.panel) {
+    ESP_LOGW("control_modal", "Unable to create modal panel");
+    lv_obj_del(shell.overlay);
+    shell.overlay = nullptr;
+    return shell;
+  }
   control_modal_style_panel(shell.panel, radius);
   control_modal_apply_panel_layout(shell.overlay, shell.panel, shell.layout, radius);
 
@@ -452,6 +489,13 @@ inline ControlModalShell control_modal_open_shell(ControlModalKind kind,
     shell.close_btn = control_modal_create_round_button(
       shell.panel, 32, button_text, icon_font,
       DARK_BORDER, DARK_BACKGROUND_TERTIARY, width_compensation_percent);
+    if (!shell.close_btn) {
+      ESP_LOGW("control_modal", "Unable to create modal close button");
+      lv_obj_del(shell.overlay);
+      shell.overlay = nullptr;
+      shell.panel = nullptr;
+      return shell;
+    }
     control_modal_style_chrome_button(shell.close_btn, shell.layout, button_top_right);
     lv_obj_add_event_cb(shell.close_btn, [](lv_event_t *) {
       control_modal_close_active();

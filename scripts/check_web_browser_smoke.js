@@ -165,8 +165,6 @@ function seededEvents() {
     { id: "select-screen__theme", state: "Light", value: "Light", option: ["Light", "Dark"] },
     { id: "switch-screen__clock_bar", state: "ON", value: true },
     { id: "switch-screen__clock_bar_time", state: "ON", value: true },
-    { id: "switch-screen__clock_bar_weather_icon", state: "OFF", value: false },
-    { id: "text-clock_bar_weather_entity", state: "weather.home" },
     { id: "switch-screen__network_status_icon", state: "ON", value: true },
     { id: "switch-indoor_temp_enable", state: "ON", value: true },
     { id: "switch-outdoor_temp_enable", state: "ON", value: true },
@@ -182,6 +180,21 @@ function seededEvents() {
     { id: "switch-developer__experimental_features", state: "ON", value: true },
     { id: "text-subpage_6_config", state: "1,B|media_player.living:Living:Speaker:Auto:play_pause::media" },
   ];
+  BUTTON_FIXTURES.forEach((state, index) => {
+    events.push({ id: `text-button_${index + 1}_config`, state });
+  });
+  return events;
+}
+
+function rotationStartupBaseEvents(includeRotation = true) {
+  const events = [
+    { id: "text-button_on_color", state: "0073FF" },
+    { id: "text-button_off_color", state: "CECECE" },
+    { id: "text-sensor_card_color", state: "DEDEDE" },
+  ];
+  if (includeRotation) {
+    events.push({ id: "select-screen__rotation", state: "90", value: "90", option: ["0", "90", "180", "270"] });
+  }
   BUTTON_FIXTURES.forEach((state, index) => {
     events.push({ id: `text-button_${index + 1}_config`, state });
   });
@@ -269,6 +282,114 @@ async function measureCoreLayout(page) {
   });
 }
 
+async function measureRotationStartupLayout(page) {
+  return page.evaluate(() => {
+    var screen = document.querySelector(".sp-screen");
+    var main = document.querySelector(".sp-main");
+    var screenRect = screen ? screen.getBoundingClientRect() : null;
+    var style = main ? getComputedStyle(main) : null;
+    return {
+      loading: !!main && main.classList.contains("sp-grid-loading"),
+      busy: main ? main.getAttribute("aria-busy") : null,
+      gridHidden: !!style && style.visibility === "hidden",
+      visibleCards: document.querySelectorAll(".sp-main > .sp-btn").length,
+      screenWidth: screenRect ? screenRect.width : 0,
+      screenHeight: screenRect ? screenRect.height : 0,
+      gridTemplateColumns: style ? style.gridTemplateColumns : "",
+      gridTemplateRows: style ? style.gridTemplateRows : "",
+    };
+  });
+}
+
+function gridTrackCount(value) {
+  value = String(value || "").trim();
+  if (!value) return 0;
+  return value.split(/\s+/).length;
+}
+
+function assertPortraitGridLayout(result, label) {
+  assert(!result.loading, `${label}: grid should no longer be waiting for startup rotation`);
+  assert.strictEqual(result.busy, null, `${label}: grid should not remain aria-busy`);
+  assert.strictEqual(result.gridHidden, false, `${label}: grid should be visible after startup rotation is known`);
+  assert(result.visibleCards >= BUTTON_FIXTURES.length, `${label}: saved cards should render`);
+  assert(result.screenHeight > result.screenWidth, `${label}: preview should end in portrait orientation`);
+  assert.strictEqual(gridTrackCount(result.gridTemplateColumns), 3, `${label}: portrait grid should use 3 columns`);
+  assert.strictEqual(gridTrackCount(result.gridTemplateRows), 5, `${label}: portrait grid should use 5 rows`);
+}
+
+async function assertRotationStartupOrdering(browser) {
+  const slug = "guition-esp32-p4-jc1060p470";
+  const context = await browser.newContext({ viewport: { width: 1100, height: 1000 } });
+  await installRoutes(context, slug);
+  const page = await context.newPage();
+  await installFakeEventSource(page);
+  try {
+    await page.goto(`http://espcontrol.test/${slug}?events=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#sp-app");
+    await page.waitForFunction(() => window.__eventSources && window.__eventSources.length > 0);
+
+    await page.evaluate((events) => window.__seedEspState(events), [
+      { id: "text-button_order", state: "1,2,3w,4,5" },
+    ].concat(rotationStartupBaseEvents(false)));
+    let layout = await measureRotationStartupLayout(page);
+    assert(layout.loading, "button_order before rotation: grid should stay in startup loading state");
+    assert.strictEqual(layout.busy, "true", "button_order before rotation: grid should be marked busy");
+    assert(layout.gridHidden, "button_order before rotation: grid should be hidden until rotation arrives");
+    assert.strictEqual(layout.visibleCards, 0, "button_order before rotation: cards should not render in the default layout first");
+
+    await page.evaluate(() => window.__seedEspState([
+      { id: "select-screen__rotation", state: "90", value: "90", option: ["0", "90", "180", "270"] },
+    ]));
+    await page.waitForSelector(".sp-main > .sp-btn");
+    layout = await measureRotationStartupLayout(page);
+    assertPortraitGridLayout(layout, "button_order before rotation");
+  } finally {
+    await context.close();
+  }
+
+  const reverseContext = await browser.newContext({ viewport: { width: 1100, height: 1000 } });
+  await installRoutes(reverseContext, slug);
+  const reversePage = await reverseContext.newPage();
+  await installFakeEventSource(reversePage);
+  try {
+    await reversePage.goto(`http://espcontrol.test/${slug}?events=1`, { waitUntil: "domcontentloaded" });
+    await reversePage.waitForSelector("#sp-app");
+    await reversePage.waitForFunction(() => window.__eventSources && window.__eventSources.length > 0);
+    await reversePage.evaluate((events) => window.__seedEspState(events), rotationStartupBaseEvents(true).concat([
+      { id: "text-button_order", state: "1,2,3w,4,5" },
+    ]));
+    await reversePage.waitForSelector(".sp-main > .sp-btn");
+    assertPortraitGridLayout(await measureRotationStartupLayout(reversePage), "rotation before button_order");
+  } finally {
+    await reverseContext.close();
+  }
+
+  const fallbackContext = await browser.newContext({ viewport: { width: 1100, height: 1000 } });
+  await installRoutes(fallbackContext, slug);
+  const fallbackPage = await fallbackContext.newPage();
+  await installFakeEventSource(fallbackPage);
+  try {
+    await fallbackPage.goto(`http://espcontrol.test/${slug}?events=1`, { waitUntil: "domcontentloaded" });
+    await fallbackPage.waitForSelector("#sp-app");
+    await fallbackPage.waitForFunction(() => window.__eventSources && window.__eventSources.length > 0);
+    await fallbackPage.evaluate((events) => window.__seedEspState(events), [
+      { id: "text-button_order", state: "1,2,3w,4,5" },
+    ].concat(rotationStartupBaseEvents(false)));
+    let layout = await measureRotationStartupLayout(fallbackPage);
+    assert(layout.loading, "rotation fallback: grid should wait briefly when rotation support exists but no value has arrived");
+    await fallbackPage.waitForFunction(() => {
+      var main = document.querySelector(".sp-main");
+      return main && !main.classList.contains("sp-grid-loading") && document.querySelectorAll(".sp-main > .sp-btn").length >= 4;
+    }, null, { timeout: 3000 });
+    layout = await measureRotationStartupLayout(fallbackPage);
+    assert(!layout.loading, "rotation fallback: grid should appear after fallback timeout");
+    assert.strictEqual(layout.gridHidden, false, "rotation fallback: grid should be visible after fallback timeout");
+    assert(layout.visibleCards >= BUTTON_FIXTURES.length, "rotation fallback: saved cards should render after fallback timeout");
+  } finally {
+    await fallbackContext.close();
+  }
+}
+
 async function assertSettingsPage(page, label, options = {}) {
   await page.getByRole("tab", { name: "Settings" }).click();
   await page.waitForSelector("#sp-settings.sp-page.active");
@@ -283,12 +404,31 @@ async function assertSettingsPage(page, label, options = {}) {
   assert(appearanceVisible, `${label}: settings content should render`);
   assert.strictEqual(themeVisible, !!options.isEpaper, `${label}: theme selector visibility should match display type`);
   assert.strictEqual(onColorVisible, !options.isEpaper, `${label}: color controls visibility should match display type`);
+  const nightScheduleCard = page.locator("#sp-settings .card").filter({
+    has: page.locator(".card-header h3", { hasText: /^Night Schedule$/ }),
+  }).first();
+  assert(await nightScheduleCard.isVisible(), `${label}: night schedule settings card should render`);
+  await nightScheduleCard.locator(".card-header").click();
+  const nightScheduleInfo = page.locator("#sp-night-schedule-info");
+  assert(await nightScheduleInfo.isVisible(), `${label}: night schedule override info panel should render`);
+  assert.strictEqual(
+    await nightScheduleInfo.innerText(),
+    "Time-based Night Schedule overrides screensaver presence wake and Media Cover Art while it is active. Use Sensor mode when you want presence to control the night schedule.",
+    `${label}: night schedule override info panel text should match`
+  );
   if (!options.isEpaper) {
     const coverArtCard = page.locator("#sp-settings .card").filter({
       has: page.locator(".card-header h3", { hasText: /^Media Cover Art$/ }),
     }).first();
     assert(await coverArtCard.isVisible(), `${label}: media cover art settings card should render`);
     await coverArtCard.locator(".card-header").click();
+    const coverArtInfo = page.locator("#sp-cover-art-info");
+    assert(await coverArtInfo.isVisible(), `${label}: media cover art override info panel should render`);
+    assert.strictEqual(
+      await coverArtInfo.innerText(),
+      "Media Cover Art overrides existing screensaver settings while the selected media player is playing.",
+      `${label}: media cover art override info panel text should match`
+    );
     await coverArtCard.locator("#sp-set-ss-cover-art-enable + .sp-toggle-track").click();
     assert.strictEqual(
       await page.locator("#sp-set-ss-track-overlay").count(),
@@ -306,8 +446,8 @@ async function assertSettingsPage(page, label, options = {}) {
   );
   assert.strictEqual(
     await page.locator("#sp-set-sensor-media-player-enable").count(),
-    1,
-    `${label}: sensor cover art override should render`
+    0,
+    `${label}: sensor cover art override should not render`
   );
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   assert(!overflow, `${label}: settings page has horizontal overflow`);
@@ -440,6 +580,16 @@ async function assertMobileDeviceViewport(browser, testCase) {
 async function assertEmptyCellSettings(page, posts, label) {
   const emptyCell = page.locator(".sp-empty-cell:not(.sp-info-only-hidden)").first();
   if ((await emptyCell.count()) === 0) return;
+  assert.strictEqual(await page.locator(".sp-btn .sp-add-pill").count(), 0, `${label}: configured slots do not show add controls`);
+  const addPill = emptyCell.locator(".sp-add-pill");
+  await page.mouse.move(0, 0);
+  assert.strictEqual(
+    await addPill.evaluate((el) => getComputedStyle(el).opacity),
+    "0",
+    `${label}: empty-slot add control is hidden until hover`
+  );
+  await emptyCell.hover();
+  await page.waitForFunction((el) => parseFloat(getComputedStyle(el).opacity) > 0.9, await addPill.elementHandle());
   const pos = await emptyCell.getAttribute("data-pos");
   const before = posts.length;
   await emptyCell.click();
@@ -577,8 +727,6 @@ function backupFixture(device, slots) {
       temperature_unit: "°C",
       clock_bar: true,
       clock_bar_time: true,
-      clock_bar_weather_icon: true,
-      clock_bar_weather_entity: "weather.home",
       network_status_icon: true,
       temperature_degree_symbol: true,
       timezone: "Europe/London (GMT+0)",
@@ -685,9 +833,7 @@ async function assertBackupImportSmoke(page, posts, testCase) {
   await waitForPost(posts, { domain: "text", name: "Subpage 3 Config", action: "set" }, "backup subpage config", before);
   await waitForPost(posts, { domain: "select", name: "screen__timezone", action: "set", option: "Europe/London (GMT+0)" }, "backup timezone import", before);
   await waitForPost(posts, { domain: "select", name: "screen__language", action: "set", option: "en" }, "backup language import", before);
-  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_time", action: "turn_on" }, "backup clock bar time import", before);
-  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_weather_icon", action: "turn_on" }, "backup clock bar weather import", before);
-  await waitForPost(posts, { domain: "text", name: "Clock Bar: Weather Entity", action: "set", value: "weather.home" }, "backup clock bar weather entity import", before);
+  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_time", action: "turn_on" }, "backup clock bar time reset", before);
   await waitForPost(posts, { domain: "number", name: "Screen: Daytime Brightness", action: "set", value: "88" }, "backup brightness import", before);
   await waitForPost(posts, { domain: "select", name: "screen__rotation", action: "set", option: "90" }, "backup rotation import", before);
 
@@ -706,13 +852,16 @@ async function assertBackupImportSmoke(page, posts, testCase) {
   );
 }
 
-async function entitySuggestionValues(page, inputSelector) {
-  await page.locator(inputSelector).fill("light");
-  await page.waitForFunction((selector) => {
+async function entitySuggestionValues(page, inputSelector, query = "light") {
+  await page.locator(inputSelector).fill(query);
+  await page.waitForFunction(({ selector, query }) => {
     const input = document.querySelector(selector);
-    return !!input && !!input.parentElement &&
-      !!input.parentElement.querySelector(".sp-entity-dropdown.sp-open .sp-entity-option");
-  }, inputSelector);
+    const normalizedQuery = String(query || "").toLowerCase();
+    if (!input || String(input.value || "").toLowerCase() !== normalizedQuery) return false;
+    const options = Array.from(input.parentElement.querySelectorAll(".sp-entity-dropdown.sp-open .sp-entity-option"));
+    if (!options.length) return false;
+    return options.every((option) => String(option.textContent || "").toLowerCase().includes(normalizedQuery));
+  }, { selector: inputSelector, query });
   return page.locator(inputSelector).evaluate((input) => {
     return Array.from(input.parentElement.querySelectorAll(".sp-entity-dropdown.sp-open .sp-entity-option"))
       .map((option) => option.textContent || "");
@@ -774,209 +923,175 @@ async function assertClockBarEditorSmoke(page, posts, label) {
   await page.getByRole("tab", { name: "Screen" }).click();
   await page.waitForSelector("#sp-screen.sp-page.active");
 
-  async function expectClockBarSelection() {
-    await page.locator(".sp-selection-bar.sp-visible", { hasText: "1 clock bar item selected" }).waitFor({ state: "visible" });
-    assert.strictEqual(
-      await page.locator(".sp-settings-overlay.sp-visible").count(),
-      0,
-      `${label}: clock bar click selects without opening the editor`
-    );
-  }
-
-  async function openSelectedClockBarEditor(title) {
-    await expectClockBarSelection();
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await page.waitForSelector(".sp-settings-overlay.sp-visible");
-    assert(await page.locator(".sp-section-title", { hasText: title }).isVisible(), `${label}: ${title.toLowerCase()} editor opens`);
-  }
-
-  async function selectAndOpenClockBarEditor(selector, title) {
-    await page.locator(selector).click();
-    await openSelectedClockBarEditor(title);
-  }
-
-  async function addClockBarItemFromPanel(section, item) {
-    await page.locator(`[data-clockbar-section="${section}"] [data-clockbar-add]`).click({ force: true });
-    await page.waitForSelector(".sp-settings-overlay.sp-visible");
-    assert.strictEqual(await page.locator(".sp-ctx-menu").count(), 0, `${label}: adding ${item} opens settings instead of a context menu`);
-    await page.locator("#sp-clockbar-add-type").selectOption(item);
-  }
-
-  async function waitForClockBarAddModalClosed() {
-    await page.waitForFunction(() => {
-      var overlay = document.querySelector(".sp-settings-overlay");
-      return overlay && !overlay.classList.contains("sp-visible");
-    });
-  }
-
-  for (const selector of [
-    '[data-clockbar-item="temperature"]',
-    '[data-clockbar-item="time"]',
-    '[data-clockbar-item="network"]',
-  ]) {
-    const box = await page.locator(selector).boundingBox();
-    const addBox = await page.locator('[data-clockbar-section="right"] [data-clockbar-add]').boundingBox();
-    assert(box, `${label}: ${selector} has a visible hit area`);
-    assert(addBox, `${label}: clock bar add control has a visible bounded area`);
+  async function openClockBarContextMenu(item, expectedAction) {
+    await page.locator(`[data-clockbar-item="${item}"]`).click({ button: "right", force: true });
+    await page.locator(".sp-ctx-menu").waitFor({ state: "visible" });
     assert(
-      Math.abs(box.height - addBox.height) <= 1,
-      `${label}: ${selector} hover height matches add control`
+      await page.locator(".sp-ctx-menu").getByText(expectedAction, { exact: true }).isVisible(),
+      `${label}: right click menu for ${item} shows ${expectedAction}`
     );
   }
-  await page.locator('.sp-clockbar-section[data-clockbar-section="left"]').hover();
-  const initialLeftItemBoxes = await page.locator('[data-clockbar-item][data-clockbar-section="left"]').evaluateAll((nodes) =>
-    nodes.map((node) => {
-      const rect = node.getBoundingClientRect();
-      return { right: rect.right };
-    })
-  );
-  const initialLeftAddBox = await page.locator('[data-clockbar-section="left"] [data-clockbar-add]').boundingBox();
-  const initialLeftContentRight = Math.max(...initialLeftItemBoxes.map((box) => box.right));
-  assert(Number.isFinite(initialLeftContentRight) && initialLeftAddBox, `${label}: left clock bar controls are measurable`);
-  assert(
-    initialLeftAddBox.x - initialLeftContentRight <= 12,
-    `${label}: left add control sits beside left-side content`
-  );
 
-  await page.dragAndDrop('[data-clockbar-item="time"]', '[data-clockbar-section="left"]');
+  const fixedItems = [
+    { selector: '[data-clockbar-item="temperature"]', section: "left" },
+    { selector: '[data-clockbar-item="time"]', section: "middle" },
+    { selector: '[data-clockbar-item="network"]', section: "right" },
+  ];
+  for (const item of fixedItems) {
+    const selector = `${item.selector}[data-clockbar-section="${item.section}"]`;
+    const box = await page.locator(selector).boundingBox();
+    assert(box, `${label}: ${selector} remains visible in the fixed clock bar`);
+  }
+
+  assert.strictEqual(await page.locator("[data-clockbar-add]").count(), 0, `${label}: clock bar add controls are removed`);
+  assert.strictEqual(await page.locator('[data-clockbar-item="temperature_2"]').count(), 0, `${label}: extra temperature mini cards are not rendered`);
+  assert.strictEqual(await page.locator("#sp-clockbar-add-type").count(), 0, `${label}: add-item selector is not present`);
+  assert.strictEqual(await page.locator("#sp-clockbar-weather-entity").count(), 0, `${label}: clock bar weather editor is not present`);
+  assert.strictEqual(await page.locator("#sp-clockbar-temperature-entity-0").count(), 0, `${label}: clock bar temperature editor is not present`);
+
+  const before = posts.length;
+  await page.locator('.sp-clockbar-section[data-clockbar-section="left"]').hover();
+  await page.locator('[data-clockbar-item="time"]').click({ force: true });
   assert.strictEqual(
     await page.locator('[data-clockbar-item="time"]').getAttribute("data-clockbar-section"),
-    "left",
-    `${label}: time can be dragged to the left clock bar section`
+    "middle",
+    `${label}: clock bar time remains in the fixed middle section`
   );
+  assert.strictEqual(await page.locator(".sp-selection-bar.sp-visible").count(), 1, `${label}: clicking clock bar selects an item`);
+  assert((await page.locator(".sp-selection-bar").textContent()).includes("Clock selected"), `${label}: clock selection is labelled`);
+  assert.strictEqual(await page.getByRole("button", { name: "Edit", exact: true }).isDisabled(), true, `${label}: clock edit button is disabled`);
+  assert.strictEqual(await page.getByRole("button", { name: "Clock bar actions", exact: true }).count(), 0, `${label}: clock selection does not expose redundant actions menu button`);
+  const selectedClockItem = page.locator('[data-clockbar-item="time"]');
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(250);
+  const selectedClockStyle = await selectedClockItem.evaluate((el) => {
+    var style = getComputedStyle(el);
+    return { borderColor: style.borderTopColor, backgroundColor: style.backgroundColor };
+  });
+  await selectedClockItem.hover();
+  await page.waitForTimeout(250);
+  const hoveredSelectedClockStyle = await selectedClockItem.evaluate((el) => {
+    var style = getComputedStyle(el);
+    return { borderColor: style.borderTopColor, backgroundColor: style.backgroundColor };
+  });
+  assert.notStrictEqual(
+    selectedClockStyle.borderColor,
+    "rgba(0, 0, 0, 0)",
+    `${label}: selected clock bar item has a visible border`
+  );
+  assert.deepStrictEqual(
+    hoveredSelectedClockStyle,
+    selectedClockStyle,
+    `${label}: selected clock bar item keeps its selected styling while hovered`
+  );
+  await openClockBarContextMenu("time", "Hide Clock");
+  await page.locator(".sp-ctx-menu").getByText("Hide Clock", { exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_time", action: "turn_off" }, `${label}: hiding clock posts clock switch`, before);
+  assert((await page.locator('[data-clockbar-item="time"]').getAttribute("class")).includes("sp-clockbar-hidden"), `${label}: hidden clock is greyed in preview`);
+  await openClockBarContextMenu("time", "Show Clock");
+  await page.locator(".sp-ctx-menu").getByText("Show Clock", { exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_time", action: "turn_on" }, `${label}: showing clock posts clock switch`, before);
 
-  let before = posts.length;
-  await expectClockBarSelection();
-  assert.strictEqual(
-    await page.locator(".sp-selection-bar.sp-visible").getByRole("button", { name: "Edit", exact: true }).count(),
-    0,
-    `${label}: time selection has no local editor`
-  );
-  await page.getByRole("button", { name: "Clock bar item actions" }).click();
-  await page.getByText("Delete", { exact: true }).click();
-  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_time", action: "turn_off" }, `${label}: delete time`, before);
-  await page.locator('[data-clockbar-item="time"]').waitFor({ state: "detached" });
-  before = posts.length;
-  await page.locator('[data-clockbar-section="middle"] [data-clockbar-add]').click();
+  await openClockBarContextMenu("network", "Hide Connectivity");
+  assert((await page.locator(".sp-selection-bar").textContent()).includes("Connectivity selected"), `${label}: connectivity selection is labelled`);
+  assert.strictEqual(await page.getByRole("button", { name: "Edit", exact: true }).isDisabled(), true, `${label}: connectivity edit button is disabled`);
+  await page.locator(".sp-ctx-menu").getByText("Hide Connectivity", { exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "screen__network_status_icon", action: "turn_off" }, `${label}: hiding connectivity posts network switch`, before);
+  assert((await page.locator('[data-clockbar-item="network"]').getAttribute("class")).includes("sp-clockbar-hidden"), `${label}: hidden connectivity is greyed in preview`);
+  const hiddenNetworkPreview = await page.locator('[data-clockbar-item="network"] .sp-network-preview').evaluate((el) => {
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      className: el.className,
+      opacity: style.opacity,
+      width: rect.width,
+      height: rect.height,
+    };
+  });
+  assert(hiddenNetworkPreview.className.includes("sp-visible"), `${label}: hidden connectivity keeps the preview icon visible`);
+  assert.strictEqual(hiddenNetworkPreview.opacity, "1", `${label}: hidden connectivity icon is not faded out by its own style`);
+  assert(hiddenNetworkPreview.width > 0 && hiddenNetworkPreview.height > 0, `${label}: hidden connectivity icon remains measurable`);
+  await openClockBarContextMenu("network", "Show Connectivity");
+  await page.locator(".sp-ctx-menu").getByText("Show Connectivity", { exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "screen__network_status_icon", action: "turn_on" }, `${label}: showing connectivity posts network switch`, before);
+
+  await page.locator('[data-clockbar-item="temperature"]').click({ force: true });
+  assert((await page.locator(".sp-selection-bar").textContent()).includes("Temperature selected"), `${label}: temperature selection is labelled`);
+  assert.strictEqual(await page.getByRole("button", { name: "Edit", exact: true }).isDisabled(), false, `${label}: temperature edit button is enabled`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.waitForSelector(".sp-settings-overlay.sp-visible");
-  assert.strictEqual(await page.locator(".sp-ctx-menu").count(), 0, `${label}: adding time opens settings instead of a context menu`);
-  await page.locator("#sp-clockbar-add-type").selectOption("time");
-  await page.locator(".sp-settings-modal .sp-save-btn").click();
-  await waitForClockBarAddModalClosed();
-  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_time", action: "turn_on" }, `${label}: add time`, before);
-  await page.locator('[data-clockbar-item="time"][data-clockbar-section="middle"]').waitFor({ state: "visible" });
+  await page.locator("#sp-clockbar-temperature-entity").fill("sensor.porch_temperature");
+  const degreeSymbolLabel = page.locator('label[for="sp-clockbar-temperature-degree-symbol"]');
+  assert.strictEqual(await degreeSymbolLabel.count(), 1, `${label}: degree-symbol label is clickable`);
+  await degreeSymbolLabel.click();
+  assert.strictEqual(
+    await page.locator("#sp-clockbar-temperature-degree-symbol").isChecked(),
+    false,
+    `${label}: clicking the degree-symbol label toggles the control`
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await waitForAnyPost(posts, [
+    { domain: "text", name: "Clock Bar: Temperature Entities", action: "set", value: "sensor.porch_temperature" },
+    { domain: "text", name: "clock_bar__temperature_entities", action: "set", value: "sensor.porch_temperature" },
+  ], `${label}: saving temperature posts entity`, before);
+  await waitForPost(posts, { domain: "switch", name: "screen__temperature_degree_symbol", action: "turn_off" }, `${label}: saving temperature posts degree symbol`, before);
+  assert(
+    !(await page.locator('[data-clockbar-item="temperature"] .sp-temp').textContent()).includes("\u00B0"),
+    `${label}: saving temperature removes the degree symbol from the preview`
+  );
+  await page.locator('[data-clockbar-item="temperature"]').click({ force: true });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.waitForSelector(".sp-settings-overlay.sp-visible");
+  const modalHideButton = page.locator(".sp-settings-modal .sp-hide-btn");
+  assert.strictEqual(await modalHideButton.count(), 1, `${label}: temperature modal shows one hide button`);
+  assert.strictEqual((await modalHideButton.innerText()).trim(), "Hide", `${label}: temperature modal hide button is labelled`);
+  const hideIconClass = await modalHideButton.locator(".mdi").getAttribute("class");
+  assert(hideIconClass.includes("mdi-eye-off-outline"), `${label}: temperature modal hide button uses the eye-off icon`);
+  assert(!hideIconClass.includes("trash"), `${label}: temperature modal hide button does not use a trash icon`);
+  await modalHideButton.click();
+  await waitForPost(posts, { domain: "switch", name: "outdoor_temp_enable", action: "turn_off" }, `${label}: hiding temperature posts visibility switch`, before);
+  assert((await page.locator('[data-clockbar-item="temperature"]').getAttribute("class")).includes("sp-clockbar-hidden"), `${label}: hidden temperature is greyed in preview`);
+  await page.locator('[data-clockbar-item="temperature"]').click({ force: true });
+  await page.getByRole("button", { name: "Show", exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "outdoor_temp_enable", action: "turn_on" }, `${label}: showing temperature posts visibility switch`, before);
+
+  await openClockBarContextMenu("temperature", "Edit Temperature");
+  assert(
+    await page.locator(".sp-ctx-menu").getByText("Hide Temperature", { exact: true }).isVisible(),
+    `${label}: right click menu for temperature includes visibility action`
+  );
+  await page.locator(".sp-ctx-menu").getByText("Hide Temperature", { exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "outdoor_temp_enable", action: "turn_off" }, `${label}: hiding temperature posts visibility switch`, before);
+  assert((await page.locator('[data-clockbar-item="temperature"]').getAttribute("class")).includes("sp-clockbar-hidden"), `${label}: hidden temperature is greyed in preview`);
+  await openClockBarContextMenu("temperature", "Show Temperature");
+  await page.locator(".sp-ctx-menu").getByText("Show Temperature", { exact: true }).click();
+  await waitForPost(posts, { domain: "switch", name: "outdoor_temp_enable", action: "turn_on" }, `${label}: showing temperature posts visibility switch`, before);
+  assert.strictEqual(await page.locator(".sp-settings-overlay.sp-visible").count(), 0, `${label}: clock bar temperature dialog closes after save`);
+
   const screenBox = await page.locator(".sp-screen").boundingBox();
   const timeBox = await page.locator('[data-clockbar-item="time"][data-clockbar-section="middle"]').boundingBox();
-  const middleAddBox = await page.locator('[data-clockbar-section="middle"] [data-clockbar-add]').boundingBox();
-  assert(screenBox && timeBox && middleAddBox, `${label}: middle clock bar controls are measurable`);
+  assert(screenBox && timeBox, `${label}: middle clock bar time is measurable`);
   const screenCenter = screenBox.x + screenBox.width / 2;
   const timeCenter = timeBox.x + timeBox.width / 2;
   assert(
     Math.abs(timeCenter - screenCenter) <= 1,
     `${label}: middle clock bar time remains centered on the screen`
   );
-  assert(
-    middleAddBox.x >= timeBox.x + timeBox.width,
-    `${label}: middle add control sits beside the centered time`
-  );
-  await page.locator('[data-clockbar-item="time"][data-clockbar-section="middle"]').click();
-  await expectClockBarSelection();
-  assert.strictEqual(
-    await page.locator(".sp-selection-bar.sp-visible").getByRole("button", { name: "Edit", exact: true }).count(),
-    0,
-    `${label}: re-added time keeps settings global`
-  );
 
-  before = posts.length;
-  await page.locator('[data-clockbar-item="network"]').click();
-  await expectClockBarSelection();
-  assert.strictEqual(
-    await page.locator(".sp-selection-bar.sp-visible").getByRole("button", { name: "Edit", exact: true }).count(),
-    0,
-    `${label}: network status selection has no empty editor`
-  );
-  await page.getByRole("button", { name: "Clock bar item actions" }).click();
-  await page.getByText("Delete", { exact: true }).click();
-  await waitForPost(posts, { domain: "switch", name: "screen__network_status_icon", action: "turn_off" }, `${label}: delete network`, before);
-  await page.locator('[data-clockbar-item="network"]').waitFor({ state: "detached" });
   const topbarBox = await page.locator(".sp-topbar").boundingBox();
-  const rightAddBox = await page.locator('[data-clockbar-section="right"] [data-clockbar-add]').boundingBox();
+  const networkBox = await page.locator('[data-clockbar-item="network"][data-clockbar-section="right"]').boundingBox();
   const firstCardBox = await page.locator(".sp-main > *").first().boundingBox();
-  assert(topbarBox && rightAddBox, `${label}: right add control has a visible bounded area`);
-  assert(rightAddBox.y > topbarBox.y, `${label}: right add control does not touch the top of the clock bar`);
+  assert(topbarBox && networkBox, `${label}: network status has a visible bounded area`);
+  assert(networkBox.y > topbarBox.y, `${label}: network status does not touch the top of the clock bar`);
   assert(
-    rightAddBox.y + rightAddBox.height < topbarBox.y + topbarBox.height,
-    `${label}: right add control does not touch the bottom of the clock bar`
+    networkBox.y + networkBox.height < topbarBox.y + topbarBox.height,
+    `${label}: network status does not touch the bottom of the clock bar`
   );
   assert(firstCardBox, `${label}: first card has a visible bounded area`);
   assert(
-    rightAddBox.y + rightAddBox.height < firstCardBox.y,
-    `${label}: right add control stays clear of the first card row`
+    networkBox.y + networkBox.height < firstCardBox.y,
+    `${label}: network status stays clear of the first card row`
   );
-  before = posts.length;
-  await addClockBarItemFromPanel("right", "network");
-  await page.locator(".sp-settings-modal .sp-save-btn").click();
-  await waitForClockBarAddModalClosed();
-  await waitForPost(posts, { domain: "switch", name: "screen__network_status_icon", action: "turn_on" }, `${label}: add network`, before);
-  await page.locator('[data-clockbar-item="network"][data-clockbar-section="right"]').waitFor({ state: "visible" });
-  const rightAddAfterBox = await page.locator('[data-clockbar-section="right"] [data-clockbar-add]').boundingBox();
-  const networkBox = await page.locator('[data-clockbar-item="network"][data-clockbar-section="right"]').boundingBox();
-  assert(rightAddAfterBox && networkBox, `${label}: right add and network controls are visible`);
-  assert(
-    rightAddAfterBox.x < networkBox.x,
-    `${label}: right add control appears to the left of right-side controls`
-  );
-  assert(
-    networkBox.x - (rightAddAfterBox.x + rightAddAfterBox.width) <= 12,
-    `${label}: right add control sits beside right-side content`
-  );
-  assert(
-    Math.abs(networkBox.width - rightAddAfterBox.width) <= 1 &&
-      Math.abs(networkBox.height - rightAddAfterBox.height) <= 1,
-    `${label}: right network hover box matches add control size`
-  );
-
-  before = posts.length;
-  await addClockBarItemFromPanel("right", "weather");
-  await page.locator("#sp-clockbar-add-weather-entity").fill("weather.home");
-  await page.locator(".sp-settings-modal .sp-save-btn").click();
-  await waitForClockBarAddModalClosed();
-  await waitForPost(posts, { domain: "switch", name: "screen__clock_bar_weather_icon", action: "turn_on" }, `${label}: add weather`, before);
-  await waitForPost(posts, { domain: "text", name: "Clock Bar: Weather Entity", action: "set", value: "weather.home" }, `${label}: set weather entity`, before);
-  await page.locator('[data-clockbar-item="weather"][data-clockbar-section="right"]').waitFor({ state: "visible" });
-  await selectAndOpenClockBarEditor('[data-clockbar-item="weather"]', "Weather");
-  await page.locator("#sp-clockbar-weather-entity").fill("weather.patio");
-  await page.locator(".sp-settings-modal .sp-save-btn").click();
-  await waitForPost(posts, { domain: "text", name: "Clock Bar: Weather Entity", action: "set", value: "weather.patio" }, `${label}: edit weather entity`, before);
-
-  before = posts.length;
-  await selectAndOpenClockBarEditor('[data-clockbar-item="temperature"]', "Temperature");
-  await page.getByText("Show Degree Symbol", { exact: true }).waitFor({ state: "visible" });
-  assert.strictEqual(await page.locator("#sp-clockbar-temperature-unit").count(), 0, `${label}: temperature unit selector stays out of clock bar editor`);
-  await page.getByRole("button", { name: "Delete" }).click();
-  await waitForAnyPost(posts, [
-    { domain: "text", name: "Clock Bar: Temperature Entities", action: "set", value: "sensor.indoor_temperature" },
-    { domain: "text", name: "clock_bar__temperature_entities", action: "set", value: "sensor.indoor_temperature" },
-  ], `${label}: delete first temperature`, before);
-  await waitForPost(posts, { domain: "switch", name: "indoor_temp_enable", action: "turn_off" }, `${label}: delete first temperature disables legacy second slot`, before);
-  await page.locator('[data-clockbar-item="temperature"]').waitFor({ state: "visible" });
-  assert.strictEqual(await page.locator('[data-clockbar-item="temperature_2"]').count(), 0, `${label}: deleting one temperature removes the second mini card`);
-  before = posts.length;
-  await page.locator('.sp-clockbar-section[data-clockbar-section="left"]').hover();
-  await addClockBarItemFromPanel("left", "temperature_2");
-  await page.locator("#sp-clockbar-add-temperature-entity-1").waitFor({ state: "visible" });
-  await page.locator(".sp-settings-modal .sp-save-btn").click();
-  await waitForClockBarAddModalClosed();
-  await waitForAnyPost(posts, [
-    { domain: "text", name: "Clock Bar: Temperature Entities", action: "set", value: "sensor.indoor_temperature" },
-    { domain: "text", name: "clock_bar__temperature_entities", action: "set", value: "sensor.indoor_temperature" },
-  ], `${label}: add second temperature mini card`, before);
-  await page.locator('[data-clockbar-item="temperature"][data-clockbar-section="left"]').waitFor({ state: "visible" });
-  await page.locator('[data-clockbar-item="temperature_2"][data-clockbar-section="left"]').waitFor({ state: "visible" });
-  await page.locator('[data-clockbar-item="temperature_2"][data-clockbar-section="left"]').click();
-  await openSelectedClockBarEditor("Temperature");
-  await page.getByText("Show Degree Symbol", { exact: true }).waitFor({ state: "visible" });
-  await page.locator(".sp-settings-close").click();
 
   await page.getByRole("tab", { name: "Settings" }).click();
   await page.waitForSelector("#sp-settings.sp-page.active");
@@ -1048,6 +1163,7 @@ async function runCase(browser, testCase) {
 (async function main() {
   const browser = await chromium.launch();
   try {
+    await assertRotationStartupOrdering(browser);
     for (const testCase of CASES) {
       await runCase(browser, testCase);
       await assertMobileDeviceViewport(browser, testCase);

@@ -27,17 +27,36 @@ api:
         ESP_LOGI("api", "API client connected: %s", client_info.c_str());
         bool is_home_assistant = client_info.find("Home Assistant") != std::string::npos;
         if (is_home_assistant && ha_api_connected()) {
+          if (!client_address.empty()) {
+            std::string host = client_address;
+            if (host.rfind("::ffff:", 0) == 0) host = host.substr(7);
+            if (host.find('.') != std::string::npos) {
+              size_t port_separator = host.find(':');
+              if (port_separator != std::string::npos) host = host.substr(0, port_separator);
+            } else if (host.find(':') != std::string::npos && host.front() != '[') {
+              host = "[" + host + "]";
+            }
+            int port = static_cast<int>(id(cover_art_home_assistant_artwork_port).state);
+            id(cover_art_home_assistant_base_url) =
+              id(cover_art_home_assistant_artwork_protocol).state + "://" + host + ":" + std::to_string(port);
+            ESP_LOGI("api", "Using Home Assistant base URL: %s",
+                     id(cover_art_home_assistant_base_url).c_str());
+          } else {
+            ESP_LOGW("api", "Home Assistant API client address is empty; image proxy base URL not updated");
+          }
           refresh_image_cards();
           if (ha_api_state_connected()) {
             apply_registered_ha_control_availability(true);
             ha_retry_unavailable_states(true);
             refresh_weather_forecast_cards();
+            ha_flush_deferred_state_requests();
           }
         }
     - delay: 2s
     - lambda: |-
         if (ha_api_connected()) refresh_image_cards();
         if (ha_api_state_connected()) {
+          ha_flush_deferred_state_requests();
           ha_retry_unavailable_states(true);
         }
         todo_reload_active_modal();
@@ -47,6 +66,7 @@ api:
         if (ha_api_state_connected()) {
           ha_retry_unavailable_states(true);
           refresh_weather_forecast_cards();
+          ha_flush_deferred_state_requests();
         }
         todo_reload_active_modal();
     - delay: 20s
@@ -55,6 +75,7 @@ api:
         if (ha_api_state_connected()) {
           ha_retry_unavailable_states(true);
           refresh_weather_forecast_cards();
+          ha_flush_deferred_state_requests();
         }
         todo_reload_active_modal();
   on_client_disconnected:
@@ -75,6 +96,7 @@ interval:
       - lambda: |-
           weather_forecast_cancel_stale_requests();
           weather_forecast_send_next_queued();
+          ha_flush_deferred_state_requests();
           ha_retry_unavailable_states();
           todo_retry_waiting_modal();
 
@@ -96,7 +118,7 @@ web_server:
   port: 80
   version: 3
   include_internal: true
-  js_url: ${web_ui_base_url}/webserver/${device_slug}/www.js?v=${firmware_version}&ui=20260609-screen-lock-touch
+  js_url: ${web_ui_base_url}/webserver/${device_slug}/www.js?v=${firmware_version}&ui=20260611-livecheck
   sorting_groups:
     - id: sg_button
       name: "Button Configuration"
@@ -146,3 +168,42 @@ switch:
     icon: "mdi:flask-outline"
     web_server:
       sorting_group_id: sg_developer
+
+select:
+  - platform: template
+    name: "Home Assistant Artwork Protocol"
+    internal: true
+    id: cover_art_home_assistant_artwork_protocol
+    entity_category: config
+    icon: "mdi:protocol"
+    optimistic: true
+    restore_value: true
+    initial_option: "http"
+    options:
+      - "http"
+      - "https"
+    web_server:
+      sorting_group_id: sg_connectivity
+    set_action:
+      - lambda: |-
+          refresh_image_cards();
+
+number:
+  - platform: template
+    name: "Home Assistant Artwork Port"
+    internal: true
+    id: cover_art_home_assistant_artwork_port
+    entity_category: config
+    icon: "mdi:lan-connect"
+    optimistic: true
+    restore_value: true
+    initial_value: 8123
+    min_value: 1
+    max_value: 65535
+    step: 1
+    mode: box
+    web_server:
+      sorting_group_id: sg_connectivity
+    set_action:
+      - lambda: |-
+          refresh_image_cards();

@@ -97,19 +97,45 @@ def test_generated_yaml(profiles: dict[str, dict]) -> None:
         assert f'firmware_manifest_slug: "{slug}"' in package, f"{slug}: packages.yaml missing manifest slug"
         assert f"cfg.num_slots = {profile['slots']};" in sensors, f"{slug}: sensors.yaml missing slot count"
         limit = image_card_limit(profile)
-        package_name = "image_cards.yaml" if limit == 4 else f"image_cards_{limit}.yaml"
-        assert package_name in package, f"{slug}: packages.yaml missing {package_name}"
-        assert f"cfg.image_card_image_count = {limit};" in sensors, (
-            f"{slug}: sensors.yaml missing image-card downloader count"
-        )
-        assert f"id(image_card_download_{limit})," in sensors, (
-            f"{slug}: sensors.yaml missing final image-card tile downloader"
-        )
-        assert f"id(image_card_modal_download_{limit})," in sensors, (
-            f"{slug}: sensors.yaml missing final image-card modal downloader"
-        )
+        if limit > 0:
+            package_name = "image_cards.yaml" if limit == 4 else f"image_cards_{limit}.yaml"
+            assert package_name in package, f"{slug}: packages.yaml missing {package_name}"
+            assert f"cfg.image_card_image_count = {limit};" in sensors, (
+                f"{slug}: sensors.yaml missing image-card downloader count"
+            )
+            assert f"id(image_card_download_{limit})," in sensors, (
+                f"{slug}: sensors.yaml missing final image-card tile downloader"
+            )
+            assert f"id(image_card_modal_download_{limit})," in sensors, (
+                f"{slug}: sensors.yaml missing final image-card modal downloader"
+            )
+        else:
+            assert "image_cards:" not in package, f"{slug}: zero image-card profile should not include image cards"
+            assert "cfg.image_card_image_count" not in sensors, (
+                f"{slug}: zero image-card profile should not wire image-card downloaders"
+            )
         if profile["firmware"].get("display", {}).get("infoOnly"):
             assert "cfg.info_only = true;" in sensors, f"{slug}: sensors.yaml missing info-only grid flag"
+
+
+def test_upgrades_do_not_reset_saved_panel_config() -> None:
+    display = (ROOT / "common" / "config" / "display.yaml").read_text(encoding="utf-8")
+    generator = (ROOT / "scripts" / "generate_device_slots.py").read_text(encoding="utf-8")
+    assert "panel_device_settings_reset_version" not in display, (
+        "firmware upgrades must not add a stored reset marker for panel config"
+    )
+    assert "reset_existing_panel_settings" not in generator, (
+        "generated device YAML must not include a boot-time panel config reset script"
+    )
+
+    for sensor_path in sorted((ROOT / "devices").glob("*/device/sensors.yaml")):
+        text = sensor_path.read_text(encoding="utf-8")
+        rel = sensor_path.relative_to(ROOT)
+        assert "reset_existing_panel_settings" not in text, f"{rel}: must not reset saved panel config on boot"
+        assert "id(button_order).publish_state(\"\")" not in text, f"{rel}: must not clear saved button order"
+        assert not re.search(r"id\((?:button|subpage)_\d+_config(?:_ext(?:_\d+)?)?\)\.publish_state\(\"\"\)", text), (
+            f"{rel}: must not clear saved button or subpage config"
+        )
 
 
 def test_square_s3_reapplies_clock_bar_layout() -> None:
@@ -322,6 +348,24 @@ def test_grid_phase2_uses_cleaned_spanned_layout() -> None:
     )
 
 
+def test_spanned_cards_refresh_after_clock_bar_padding_changes() -> None:
+    clock_bar = (ROOT / "components" / "espcontrol" / "clock_bar.h").read_text(encoding="utf-8")
+    layout = (ROOT / "components" / "espcontrol" / "button_grid_layout.h").read_text(encoding="utf-8")
+    grid = (ROOT / "components" / "espcontrol" / "button_grid_grid.h").read_text(encoding="utf-8")
+    assert "struct ClockBarResponsiveGridCard" in clock_bar, (
+        "spanned card dimensions must be tracked outside the one-time grid placement pass"
+    )
+    assert "clock_bar_refresh_responsive_grid_cards();" in clock_bar, (
+        "clock-bar padding changes must resize registered wide/tall/large cards"
+    )
+    assert "clock_bar_register_responsive_grid_card(" in layout, (
+        "wide/tall/large cards must register their measured grid span"
+    )
+    assert "clock_bar_clear_responsive_grid_cards(main_page_obj);" in grid, (
+        "main-grid refreshes must replace old responsive card registrations"
+    )
+
+
 def test_temperature_unit_changes_refresh_weather_cards() -> None:
     config = (ROOT / "components" / "espcontrol" / "button_grid_config.h").read_text(encoding="utf-8")
     match = re.search(
@@ -391,11 +435,13 @@ def main() -> int:
     test_public_device_capabilities(profile_slugs)
     test_generated_web(profiles)
     test_generated_yaml(profiles)
+    test_upgrades_do_not_reset_saved_panel_config()
     test_square_s3_reapplies_clock_bar_layout()
     test_setup_icon_glyphs()
     test_weather_card_visual_matches_preview()
     test_weather_card_mode_visibility_reset()
     test_grid_phase2_uses_cleaned_spanned_layout()
+    test_spanned_cards_refresh_after_clock_bar_padding_changes()
     test_temperature_unit_changes_refresh_weather_cards()
     test_current_weather_state_updates_availability()
     test_firmware_matrices(profile_slugs)

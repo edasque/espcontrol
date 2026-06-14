@@ -71,11 +71,6 @@ assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.clockBarTime), [
   "switch-screen_clock_bar_time",
   "switch-clock_bar_time_enabled",
 ], "clock bar time SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.clockBarWeather), [
-  "switch-screen__clock_bar_weather_icon",
-  "switch-screen_clock_bar_weather_icon",
-  "switch-clock_bar_weather_icon_enabled",
-], "clock bar weather SSE aliases are registered together");
 assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.scheduleWakeTimeout), [
   "number-screen__schedule_wake_timeout",
   "number-screen_schedule_wake_timeout",
@@ -106,6 +101,14 @@ assert(
   Array.from(hooks.entityLookupNames("screen_saver_hide_cover_art_external_input")).includes("screen_saver__hide_for_external_sources"),
   "cover art external-input post aliases include the legacy external-sources object id"
 );
+assert.deepStrictEqual(Array.from(hooks.coverArtHideExternalInputPostUrls(false)), [
+  "/switch/screen_saver__hide_cover_art_on_external_input/turn_off",
+  "/switch/screen_saver_hide_cover_art_on_external_input/turn_off",
+  "/switch/hide_cover_art_on_external_input/turn_off",
+  "/switch/cover_art_hide_external_input/turn_off",
+  "/switch/screen_saver__hide_for_external_sources/turn_off",
+  "/switch/Screen%20Saver%3A%20Hide%20for%20external%20sources/turn_off",
+], "cover art external-input posts include all firmware object id aliases");
 assert(
   Array.from(hooks.entityLookupNames("screen_saver_track_overlay_duration")).includes("screen_saver__show_track_overlay"),
   "cover art track-overlay post aliases include the legacy show-track-overlay object id"
@@ -181,6 +184,12 @@ for (const [slug, device] of Object.entries(manifest.devices || {})) {
   assert.deepStrictEqual(device.rotation.options, ALL_ROTATIONS, `${slug}: normal rotation options`);
   assert.strictEqual(device.rotation.experimentalOptions, undefined, `${slug}: no hidden rotation options`);
   assertGeneratedRotationOptions(slug, featureConfig, "screenRotationOptions", ALL_ROTATIONS);
+  if (Object.prototype.hasOwnProperty.call(device.rotation, "displayOffset")) {
+    assert(
+      featureConfig.includes(`screenRotationDisplayOffset:${device.rotation.displayOffset}`),
+      `${slug}: generated web UI must include screen rotation display offset ${device.rotation.displayOffset}`
+    );
+  }
   assert(
     !featureConfig.includes("screenRotationExperimentalOptions"),
     `${slug}: generated web UI must not hide rotation options behind the dev flag`
@@ -1085,6 +1094,51 @@ assert.strictEqual(
   }),
   null
 );
+const publicVersionIndex = {
+  device: "guition-esp32-p4-jc1060p470",
+  versions: [{
+    version: "v1.12.0",
+    release_url: "https://github.com/jtenniswood/espcontrol/releases/tag/v1.12.0",
+    ota: {
+      path: "guition-esp32-p4-jc1060p470.ota.bin",
+      md5: "0123456789abcdef0123456789abcdef",
+    },
+  }, {
+    version: "v1.11.0",
+    release_url: "https://github.com/jtenniswood/espcontrol/releases/tag/v1.11.0",
+    ota: {
+      path: "versions/v1.11.0/guition-esp32-p4-jc1060p470.ota.bin",
+      md5: "abcdef0123456789abcdef0123456789",
+    },
+  }],
+};
+assert.deepStrictEqual(plain(hooks.firmwareInfosFromPublicVersions(publicVersionIndex)), [{
+  latest_version: "v1.12.0",
+  release_url: "https://github.com/jtenniswood/espcontrol/releases/tag/v1.12.0",
+  ota_url: "https://jtenniswood.github.io/espcontrol/firmware/guition-esp32-p4-jc1060p470/guition-esp32-p4-jc1060p470.ota.bin",
+  ota_filename: "guition-esp32-p4-jc1060p470.ota.bin",
+  ota_md5: "0123456789abcdef0123456789abcdef",
+}, {
+  latest_version: "v1.11.0",
+  release_url: "https://github.com/jtenniswood/espcontrol/releases/tag/v1.11.0",
+  ota_url: "https://jtenniswood.github.io/espcontrol/firmware/guition-esp32-p4-jc1060p470/versions/v1.11.0/guition-esp32-p4-jc1060p470.ota.bin",
+  ota_filename: "guition-esp32-p4-jc1060p470.ota.bin",
+  ota_md5: "abcdef0123456789abcdef0123456789",
+}]);
+assert.deepStrictEqual(plain(hooks.firmwareStateAfterVersionIndex("v1.12.0", publicVersionIndex)), {
+  latest: "v1.12.0",
+  selected: "v1.12.0",
+  installAvailable: false,
+  selectorVisible: true,
+  installedSelected: true,
+});
+assert.deepStrictEqual(plain(hooks.firmwareStateAfterVersionIndex("v1.12.0", publicVersionIndex, "v1.11.0")), {
+  latest: "v1.12.0",
+  selected: "v1.11.0",
+  installAvailable: true,
+  selectorVisible: true,
+  installedSelected: false,
+});
 assert.strictEqual(hooks.firmwareVersionLabelFor("", true), "Checking version...");
 assert.strictEqual(hooks.firmwareVersionLabelFor("", false), "Version unknown");
 assert.deepStrictEqual(plain(hooks.entityDetailPaths("text_sensor", hooks.entityLookupNames("firmware_version"))), [

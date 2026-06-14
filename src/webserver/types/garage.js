@@ -141,26 +141,24 @@ registerButtonType("garage", {
       placeholder: garageCommandMode(mode) ? "e.g. " + garageModeDefaultLabel(mode) + " Garage" : "e.g. Garage Door",
     }));
 
-    if (!garageCommandMode(mode)) {
-      function setLabelVisible(value) {
-        labelControl.field.style.display = value === "label" ? "" : "none";
-      }
-
-      var labelMode = garageLabelDisplayMode(b);
-      helpers.renderCardSegmentControl(panel, b, helpers, {
-        segment: Object.assign({}, GARAGE_CARD_METADATA.display, {
-          value: function () { return labelMode; },
-          onSelect: function (button, cardHelpers, value) {
-            labelMode = value;
-            setGarageLabelDisplayMode(button, value);
-            cardHelpers.saveField("options", button.options);
-            setLabelVisible(value);
-            scheduleRender();
-          },
-        }),
-      });
-      setLabelVisible(labelMode);
+    function setLabelVisible(value) {
+      labelControl.field.style.display = value === "label" ? "" : "none";
     }
+
+    var labelMode = garageLabelDisplayMode(b);
+    helpers.renderCardSegmentControl(panel, b, helpers, {
+      segment: Object.assign({}, GARAGE_CARD_METADATA.display, {
+        value: function () { return labelMode; },
+        onSelect: function (button, cardHelpers, value) {
+          labelMode = value;
+          setGarageLabelDisplayMode(button, value);
+          cardHelpers.saveField("options", button.options);
+          setLabelVisible(value);
+          scheduleRender();
+        },
+      }),
+    });
+    setLabelVisible(labelMode);
 
     panel.appendChild(labelControl.field);
 
@@ -198,7 +196,7 @@ registerButtonType("garage", {
   renderPreview: function (b, helpers) {
     var mode = normalizeGarageMode(b.sensor);
     var label = b.label || (garageCommandMode(mode) ? garageModeDefaultLabel(mode) : b.entity || "Garage Door");
-    if (!garageCommandMode(mode) && garageLabelDisplayMode(b) === "status") label = "Closed";
+    if (garageLabelDisplayMode(b) === "status") label = "Closed";
     return cardBadgePreview(b, helpers, {
       label: label,
       iconFallback: garageModeDefaultIcon(mode),

@@ -290,6 +290,11 @@
       "mdi": "bell"
     },
     {
+      "name": "Bird",
+      "codepoint": "F15C6",
+      "mdi": "bird"
+    },
+    {
       "name": "Blinds",
       "codepoint": "F00AC",
       "mdi": "blinds"
@@ -920,6 +925,11 @@
       "mdi": "music"
     },
     {
+      "name": "Nintendo Switch",
+      "codepoint": "F07E1",
+      "mdi": "nintendo-switch"
+    },
+    {
       "name": "Outdoor Lamp",
       "codepoint": "F1054",
       "mdi": "outdoor-lamp"
@@ -970,6 +980,11 @@
       "mdi": "play-pause"
     },
     {
+      "name": "PlayStation",
+      "codepoint": "F0414",
+      "mdi": "sony-playstation"
+    },
+    {
       "name": "Pool",
       "codepoint": "F0606",
       "mdi": "pool"
@@ -1013,6 +1028,41 @@
       "name": "Recycle",
       "codepoint": "F044C",
       "mdi": "recycle"
+    },
+    {
+      "name": "Remote Back",
+      "codepoint": "F030D",
+      "mdi": "keyboard-backspace"
+    },
+    {
+      "name": "Remote Down",
+      "codepoint": "F0047",
+      "mdi": "arrow-down-bold-circle"
+    },
+    {
+      "name": "Remote Home",
+      "codepoint": "F07D2",
+      "mdi": "home-circle"
+    },
+    {
+      "name": "Remote Left",
+      "codepoint": "F004F",
+      "mdi": "arrow-left-bold-circle"
+    },
+    {
+      "name": "Remote OK",
+      "codepoint": "F05E0",
+      "mdi": "check-circle"
+    },
+    {
+      "name": "Remote Right",
+      "codepoint": "F0056",
+      "mdi": "arrow-right-bold-circle"
+    },
+    {
+      "name": "Remote Up",
+      "codepoint": "F005F",
+      "mdi": "arrow-up-bold-circle"
     },
     {
       "name": "Robot Vacuum",

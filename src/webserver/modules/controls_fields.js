@@ -95,8 +95,9 @@ function colorField(id, value, onChange) {
 function toggleRow(label, id, checked) {
   var row = document.createElement("div");
   row.className = "sp-toggle-row";
-  var lbl = document.createElement("span");
+  var lbl = document.createElement("label");
   lbl.className = "sp-toggle-label";
+  lbl.htmlFor = id;
   lbl.textContent = label;
   row.appendChild(lbl);
   var toggle = document.createElement("label");

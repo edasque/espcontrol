@@ -4,6 +4,8 @@
 
 // ── Home Assistant-driven page navigation ────────────────────────────
 
+inline void image_card_hide_modal();
+
 struct NavigationSubpageEntry {
   int slot = 0;
   int display_order = 0;
@@ -40,6 +42,9 @@ inline std::string navigation_lower(const std::string &value) {
 }
 
 inline void navigation_hide_modals() {
+  control_modal_close_nested_menu();
+  control_modal_close_active();
+  image_card_hide_modal();
   media_volume_hide_modal();
   climate_control_hide_modal();
   option_select_hide_modal();
@@ -47,6 +52,31 @@ inline void navigation_hide_modals() {
   alarm_pin_hide_modal();
   alarm_control_hide_modal();
   network_status_hide_modal();
+}
+
+inline void navigation_close_modals_for_display_takeover() {
+  control_modal_close_nested_menu();
+  control_modal_force_close_active();
+  image_card_hide_modal();
+  media_volume_hide_modal();
+  climate_control_hide_modal();
+  option_select_hide_modal();
+  switch_confirmation_hide_modal();
+  alarm_pin_hide_modal();
+  alarm_control_hide_modal();
+  network_status_hide_modal();
+}
+
+inline bool navigation_return_home(lv_obj_t *main_page_obj) {
+  navigation_hide_modals();
+  if (main_page_obj == nullptr) {
+    ESP_LOGW("navigation", "Main page is not ready");
+    return false;
+  }
+  if (lv_scr_act() != main_page_obj) {
+    lv_scr_load_anim(main_page_obj, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
+  }
+  return true;
 }
 
 inline void navigation_clear_subpages() {
@@ -145,16 +175,11 @@ inline bool espcontrol_navigate(const std::string &target,
     return false;
   }
 
-  navigation_hide_modals();
-
   if (normalized == "home" || normalized == "main") {
-    if (main_page_obj == nullptr) {
-      ESP_LOGW("navigation", "Main page is not ready");
-      return false;
-    }
-    lv_scr_load_anim(main_page_obj, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
-    return true;
+    return navigation_return_home(main_page_obj);
   }
+
+  navigation_hide_modals();
 
   bool duplicate_found = false;
   NavigationSubpageEntry *label_target =

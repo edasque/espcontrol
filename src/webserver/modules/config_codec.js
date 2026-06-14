@@ -225,7 +225,7 @@ var IMAGE_ICON_OPTION = "image_icon";
 var IMAGE_MODAL_MODE_OPTION = "image_modal_mode";
 var IMAGE_REFRESH_OPTION = "image_refresh";
 var IMAGE_REFRESH_MODE_OPTION = "image_refresh_mode";
-var IMAGE_CARD_LIMIT = Math.max(1, parseInt((CFG && CFG.imageCardLimit) || 4, 10) || 4);
+var IMAGE_CARD_LIMIT = Math.max(0, parseInt(CFG && CFG.imageCardLimit != null ? CFG.imageCardLimit : 4, 10) || 0);
 var ALARM_ACTIONS = [
   { value: "away", label: "Arm Away", service: "alarm_control_panel.alarm_arm_away", icon: "Shield Lock" },
   { value: "home", label: "Arm Home", service: "alarm_control_panel.alarm_arm_home", icon: "Shield Home" },
@@ -415,6 +415,7 @@ function imageCardLimit() {
 }
 
 function imageCardLimitMessage() {
+  if (IMAGE_CARD_LIMIT <= 0) return "Image cards are not available on this display.";
   return "Image cards use shared firmware download slots. You can save up to " +
     IMAGE_CARD_LIMIT + " image cards total across the main page and subpages.";
 }
@@ -978,14 +979,12 @@ function normalizeGarageLabelDisplayMode(value) {
 function normalizeGarageOptions(options, mode) {
   var labelMode = normalizeGarageLabelDisplayMode(
     configOptionValue(options, GARAGE_LABEL_DISPLAY_OPTION));
-  if (garageCommandMode(mode)) return "";
   return labelMode === "status"
     ? setConfigOptionValue("", GARAGE_LABEL_DISPLAY_OPTION, labelMode)
     : "";
 }
 
 function garageLabelDisplayMode(b) {
-  if (garageCommandMode(b && b.sensor)) return "label";
   return normalizeGarageLabelDisplayMode(
     configOptionValue(b && b.options, GARAGE_LABEL_DISPLAY_OPTION));
 }

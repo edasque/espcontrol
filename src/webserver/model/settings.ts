@@ -12,8 +12,10 @@ export function normalizeClockBarTemperatureEntities(value: unknown): string[] {
     const entity = String(entry || "").trim();
     if (entity && out.indexOf(entity) === -1) out.push(entity);
   }
-  return out.slice(0, 6);
+  return out.slice(0, 1);
 }
+
+export const CLOCK_BAR_FIXED_LAYOUT = "left:temperature|middle:time|right:network";
 
 export function normalizeLanguage(value: unknown): string {
   const language = String(value == null ? "" : value).trim().toLowerCase();
@@ -26,6 +28,17 @@ export function normalizeHour(value: unknown, fallback: number): number {
   if (n < 0) return 0;
   if (n > 23) return 23;
   return n;
+}
+
+export function normalizeTimeOfDay(value: unknown, fallback: string): string {
+  const text = String(value == null ? "" : value).trim();
+  const match = /^(\d{1,2}):(\d{2})$/.exec(text);
+  if (!match) return fallback;
+  const hour = parseInt(match[1] || "", 10);
+  const minute = parseInt(match[2] || "", 10);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return fallback;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
 }
 
 export function normalizeScheduleWakeTimeout(value: unknown): number {
@@ -128,6 +141,8 @@ export interface BackupScreenSettingsState {
   brightnessDayVal: number;
   brightnessNightVal: number;
   automaticBrightnessEnabled: boolean;
+  brightnessDawnTime: string;
+  brightnessDuskTime: string;
   scheduleTrigger: string;
   scheduleEnabled: boolean;
   scheduleOnHour: number;
@@ -161,6 +176,8 @@ export function normalizeBackupScreenSettings(
     automaticBrightnessEnabled: objectValue(screenSettings, "automatic_brightness") != null
       ? !!screenSettings.automatic_brightness
       : true,
+    brightnessDawnTime: normalizeTimeOfDay(screenSettings.brightness_dawn_time, "06:00"),
+    brightnessDuskTime: normalizeTimeOfDay(screenSettings.brightness_dusk_time, "18:00"),
     scheduleTrigger,
     scheduleEnabled: scheduleTrigger !== "disabled",
     scheduleOnHour: normalizeHour(screenSettings.schedule_on_hour, 6),
@@ -214,8 +231,6 @@ export interface BackupPanelSettingsState {
   clockBar: boolean;
   clockBarLayout: string;
   clockBarTime: boolean;
-  clockBarWeatherIcon: boolean;
-  clockBarWeatherEntity: string;
   networkStatusIcon: boolean;
   temperatureDegreeSymbol: boolean;
   subpageChevron: boolean;
@@ -237,6 +252,7 @@ export interface BackupPanelSettingsState {
   mediaPlayerSleepPreventionEntity: string;
   coverArtScreensaver: boolean;
   coverArtMediaPlayerEntity: string;
+  coverArtAttributeConditions: string;
   coverArtDelay: unknown;
   coverArtTrackOverlayDuration: unknown;
   coverArtHideExternalInput: boolean;
@@ -268,6 +284,7 @@ export function normalizeBackupPanelSettings(
   const hasNtpServer2 = objectValue(settings, "ntp_server_2") !== undefined;
   const hasNtpServer3 = objectValue(settings, "ntp_server_3") !== undefined;
   const hasDeveloperExperimentalFeatures = objectValue(settings, "developer_experimental_features") !== undefined;
+  const hasOutdoorTempEnable = objectValue(settings, "outdoor_temp_enable") !== undefined;
   const clockFormat = current.clockFormatOptions.indexOf(String(settings.clock_format || "")) !== -1
     ? String(settings.clock_format)
     : current.clockFormat;
@@ -297,16 +314,14 @@ export function normalizeBackupPanelSettings(
       : legacyTemperatureEntities,
   );
   return {
-    indoorTempEnable: clockBarTemperatureEntities.length > 1,
-    outdoorTempEnable: clockBarTemperatureEntities.length > 0,
-    indoorTempEntity: clockBarTemperatureEntities[1] || "",
+    indoorTempEnable: false,
+    outdoorTempEnable: hasOutdoorTempEnable ? !!settings.outdoor_temp_enable : clockBarTemperatureEntities.length > 0,
+    indoorTempEntity: "",
     outdoorTempEntity: clockBarTemperatureEntities[0] || "",
     clockBarTemperatureEntities,
     clockBar: objectValue(settings, "clock_bar") != null ? !!settings.clock_bar : false,
-    clockBarLayout: String(settings.clock_bar_layout || current.clockBarLayout),
+    clockBarLayout: CLOCK_BAR_FIXED_LAYOUT,
     clockBarTime: objectValue(settings, "clock_bar_time") != null ? !!settings.clock_bar_time : true,
-    clockBarWeatherIcon: objectValue(settings, "clock_bar_weather_icon") != null ? !!settings.clock_bar_weather_icon : false,
-    clockBarWeatherEntity: String(settings.clock_bar_weather_entity || ""),
     networkStatusIcon: objectValue(settings, "network_status_icon") != null ? !!settings.network_status_icon : true,
     temperatureDegreeSymbol: objectValue(settings, "temperature_degree_symbol") != null
       ? !!settings.temperature_degree_symbol
@@ -340,6 +355,7 @@ export function normalizeBackupPanelSettings(
     mediaPlayerSleepPreventionEntity: String(settings.media_player_sleep_prevention_entity || ""),
     coverArtScreensaver: !!settings.cover_art_screensaver,
     coverArtMediaPlayerEntity: String(settings.cover_art_media_player_entity || settings.media_player_sleep_prevention_entity || ""),
+    coverArtAttributeConditions: String(settings.cover_art_attribute_conditions || settings.cover_art_conditions || ""),
     coverArtDelay: objectValue(settings, "cover_art_delay") != null ? settings.cover_art_delay : 10,
     coverArtTrackOverlayDuration: objectValue(settings, "cover_art_track_overlay_duration") != null ? settings.cover_art_track_overlay_duration : 5,
     coverArtHideExternalInput: objectValue(settings, "cover_art_hide_external_input") != null

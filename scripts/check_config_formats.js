@@ -859,7 +859,7 @@ assertButtonRoundTrip(hooks, "garage open command button", {
   precision: "",
 }, false);
 
-assertButtonMigration(hooks, "garage command clears status display", "cover.garage;Open;Garage Open;Auto;open;;garage;;label_display=status", {
+assertButtonRoundTrip(hooks, "garage open command status button", {
   entity: "cover.garage",
   label: "Open",
   icon: "Garage Open",
@@ -868,8 +868,18 @@ assertButtonMigration(hooks, "garage command clears status display", "cover.gara
   unit: "",
   type: "garage",
   precision: "",
-  options: "",
-});
+  options: "label_display=status",
+}, false);
+
+assert.strictEqual(
+  hooks.garageLabelDisplayMode({
+    type: "garage",
+    sensor: "open",
+    options: "label_display=status",
+  }),
+  "status",
+  "garage open command status display option"
+);
 
 assertButtonRoundTrip(hooks, "garage close command button", {
   entity: "cover.garage",
@@ -880,6 +890,18 @@ assertButtonRoundTrip(hooks, "garage close command button", {
   unit: "",
   type: "garage",
   precision: "",
+}, false);
+
+assertButtonRoundTrip(hooks, "garage close command status button", {
+  entity: "cover.garage",
+  label: "Close",
+  icon: "Garage",
+  icon_on: "Auto",
+  sensor: "close",
+  unit: "",
+  type: "garage",
+  precision: "",
+  options: "label_display=status",
 }, false);
 
 assertButtonRoundTrip(hooks, "lock button", {
@@ -1600,7 +1622,7 @@ assertButtonMigration(hooks, "fan card clears ignored fields", "fan.bedroom;Bedr
 assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_speed", false, false), false, "fan picker hidden without experimental flag");
 assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_speed", true, false), true, "fan picker visible with experimental flag");
 assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_speed", true, true), true, "fan picker visible in subpages with experimental flag");
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("image", false, false), false, "image picker hidden without experimental flag");
+assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("image", false, false), true, "image picker visible without experimental flag");
 assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("image", true, false), true, "image picker visible with experimental flag");
 assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("image", true, true), true, "image picker visible in subpages with experimental flag");
 assert.deepStrictEqual(Array.from(hooks.imageModalModeValues()), ["fill", "fit"], "image modal mode values are contract-backed");

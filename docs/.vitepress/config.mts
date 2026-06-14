@@ -158,7 +158,7 @@ const faqItems = [
   {
     question: 'What Card Types Are Available?',
     answer:
-      'The setup page includes Switch, Lights, Action, Webhook, Trigger, Sensor, Doors & Windows, Presence, Slider, Cover, Garage Door, Lock, Date & Time, World Clock, Weather, Media, Climate, Internal Switches, and Subpage cards.',
+      'The setup page includes Switch, Lights, Action, Option Select, Webhook, Trigger, Sensor, Doors & Windows, Presence, Slider, Fans, Cover, Garage Door, Lock, Alarm, Date & Time, World Clock, Weather, Camera, Media, Climate, Internal Switches, Screen Lock, and Subpage cards.',
   },
   {
     question: 'How Many Cards Can I Have?',
@@ -385,6 +385,8 @@ export default defineConfig({
           { text: 'Install', link: '/getting-started/install' },
           { text: 'Manual ESPHome Setup', link: '/getting-started/manual-esphome-setup' },
           { text: 'Enable Actions', link: '/getting-started/home-assistant-actions' },
+          { text: '3D Printable Stands', link: '/reference/3d-printable-stands' },
+          { text: 'Collect USB Logs', link: '/getting-started/collect-usb-logs' },
           { text: 'Troubleshooting', link: '/getting-started/troubleshooting' },
         ],
       },
@@ -409,18 +411,24 @@ export default defineConfig({
       {
         text: 'Card Types',
         items: [
+          { text: 'Overview', link: '/card-types/' },
           { text: 'Action', link: '/card-types/actions' },
+          { text: 'Alarm', link: '/card-types/alarms' },
           { text: 'Calendar', link: '/card-types/meeting-calendar' },
+          { text: 'Camera', link: '/card-types/cameras' },
           { text: 'Climate', link: '/card-types/climate' },
           { text: 'Cover', link: '/card-types/covers' },
           { text: 'Date & Time', link: '/card-types/calendar' },
           { text: 'Doors & Windows', link: '/card-types/doors-windows' },
+          { text: 'Fans', link: '/card-types/fans' },
           { text: 'Garage Door', link: '/card-types/garage-doors' },
           { text: 'Internal', link: '/card-types/internal-relays' },
           { text: 'Lights', link: '/card-types/lights' },
           { text: 'Lock', link: '/card-types/locks' },
           { text: 'Media', link: '/card-types/media' },
+          { text: 'Option Select', link: '/card-types/option-select' },
           { text: 'Presence', link: '/card-types/presence' },
+          { text: 'Screen Lock', link: '/card-types/screen-lock' },
           { text: 'Sensor', link: '/card-types/sensors' },
           { text: 'Slider', link: '/card-types/sliders' },
           { text: 'Solar', link: '/card-types/solar' },

@@ -665,7 +665,7 @@ inline std::string normalize_garage_label_display(const std::string &value) {
 
 inline std::string garage_card_options_normalized(const std::string &options,
                                                   const std::string &sensor) {
-  if (sensor == "open" || sensor == "close") return "";
+  (void)sensor;
   return normalize_garage_label_display(cfg_option_value(options, "label_display")) == "status"
     ? "label_display=status"
     : "";
@@ -1318,6 +1318,9 @@ inline void reset_ha_control_availability_refs() {
 #ifndef ESPCONTROL_HA_RETRY_HELPERS_DEFINED
 inline void ha_reset_unavailable_state_retries() {}
 #endif
+#ifndef ESPCONTROL_HA_DEFERRED_HELPERS_DEFINED
+inline void ha_reset_deferred_state_requests() {}
+#endif
 
 inline uint32_t &ha_subscription_generation() {
   static uint32_t generation = 1;
@@ -1329,6 +1332,7 @@ inline void bump_ha_subscription_generation() {
   generation++;
   if (generation == 0) generation = 1;
   ha_reset_unavailable_state_retries();
+  ha_reset_deferred_state_requests();
 }
 
 inline void register_ha_control_availability(lv_obj_t *visual_obj, lv_obj_t *input_obj,
@@ -1786,27 +1790,25 @@ inline bool parse_weather_forecast_payload(const std::string &payload,
 
 inline std::string weather_forecast_response_template(const std::string &entity_id) {
   return std::string("{% set entity = '") + entity_id + "' %}"
-    "{% set response_data = response if response is defined and response is not none else none %}"
-    "{% set entity_response = response_data if response_data is not none and 'forecast' in response_data else (response_data[entity] if response_data is not none and entity in response_data else none) %}"
-    "{% set forecasts = entity_response['forecast'] if entity_response is not none and 'forecast' in entity_response else [] %}"
-    "{% set today_date = now().date() %}"
-    "{% set tomorrow_date = (now() + timedelta(days=1)).date() %}"
-    "{% set ns = namespace(today=none, tomorrow=none) %}"
-    "{% for item in forecasts %}"
-    "{% set item_dt = as_datetime(item['datetime']) if 'datetime' in item else none %}"
-    "{% set item_date = as_local(item_dt).date() if item_dt is not none else (as_datetime(item['date']).date() if 'date' in item else none) %}"
-    "{% if item_date == today_date and ns.today is none %}{% set ns.today = item %}{% endif %}"
-    "{% if item_date == tomorrow_date and ns.tomorrow is none %}{% set ns.tomorrow = item %}{% endif %}"
+    "{% set response_data = response if response is defined and response is not none else {} %}"
+    "{% set entity_response = response_data if 'forecast' in response_data else (response_data[entity] if entity in response_data else {}) %}"
+    "{% set forecasts = entity_response['forecast'] if 'forecast' in entity_response else [] %}"
+    "{% set today_date = now().date() %}{% set tomorrow_date = (now() + timedelta(days=1)).date() %}"
+    "{% set ns = namespace(today=none, tomorrow=none) %}{% for item in forecasts %}"
+    "{% set item_dt = as_datetime(item['datetime']) if 'datetime' in item else none %}{% set item_date = as_local(item_dt).date() if item_dt is not none else (as_datetime(item['date']).date() if 'date' in item else none) %}"
+    "{% if item_date == today_date and ns.today is none %}{% set ns.today = item %}{% elif item_date == tomorrow_date and ns.tomorrow is none %}{% set ns.tomorrow = item %}{% endif %}"
     "{% endfor %}"
     "{% set today = ns.today if ns.today is not none else (forecasts[0] if forecasts|length > 0 else none) %}"
     "{% set tomorrow = ns.tomorrow if ns.tomorrow is not none else (forecasts[1] if forecasts|length > 1 else none) %}"
-    "{% set today_high = today['temperature'] if today is not none and 'temperature' in today else (today['native_temperature'] if today is not none and 'native_temperature' in today else (today['temperature_high'] if today is not none and 'temperature_high' in today else (today['native_temperature_high'] if today is not none and 'native_temperature_high' in today else (today['high_temperature'] if today is not none and 'high_temperature' in today else (today['max_temperature'] if today is not none and 'max_temperature' in today else (today['temperature_max'] if today is not none and 'temperature_max' in today else (today['temp_high'] if today is not none and 'temp_high' in today else (today['max_temp'] if today is not none and 'max_temp' in today else (today['high'] if today is not none and 'high' in today else ''))))))))) %}"
-    "{% set today_low = today['templow'] if today is not none and 'templow' in today else (today['native_templow'] if today is not none and 'native_templow' in today else (today['temperature_low'] if today is not none and 'temperature_low' in today else (today['native_temperature_low'] if today is not none and 'native_temperature_low' in today else (today['low_temperature'] if today is not none and 'low_temperature' in today else (today['min_temperature'] if today is not none and 'min_temperature' in today else (today['temperature_min'] if today is not none and 'temperature_min' in today else (today['temp_low'] if today is not none and 'temp_low' in today else (today['min_temp'] if today is not none and 'min_temp' in today else (today['low'] if today is not none and 'low' in today else ''))))))))) %}"
-    "{% set tomorrow_high = tomorrow['temperature'] if tomorrow is not none and 'temperature' in tomorrow else (tomorrow['native_temperature'] if tomorrow is not none and 'native_temperature' in tomorrow else (tomorrow['temperature_high'] if tomorrow is not none and 'temperature_high' in tomorrow else (tomorrow['native_temperature_high'] if tomorrow is not none and 'native_temperature_high' in tomorrow else (tomorrow['high_temperature'] if tomorrow is not none and 'high_temperature' in tomorrow else (tomorrow['max_temperature'] if tomorrow is not none and 'max_temperature' in tomorrow else (tomorrow['temperature_max'] if tomorrow is not none and 'temperature_max' in tomorrow else (tomorrow['temp_high'] if tomorrow is not none and 'temp_high' in tomorrow else (tomorrow['max_temp'] if tomorrow is not none and 'max_temp' in tomorrow else (tomorrow['high'] if tomorrow is not none and 'high' in tomorrow else ''))))))))) %}"
-    "{% set tomorrow_low = tomorrow['templow'] if tomorrow is not none and 'templow' in tomorrow else (tomorrow['native_templow'] if tomorrow is not none and 'native_templow' in tomorrow else (tomorrow['temperature_low'] if tomorrow is not none and 'temperature_low' in tomorrow else (tomorrow['native_temperature_low'] if tomorrow is not none and 'native_temperature_low' in tomorrow else (tomorrow['low_temperature'] if tomorrow is not none and 'low_temperature' in tomorrow else (tomorrow['min_temperature'] if tomorrow is not none and 'min_temperature' in tomorrow else (tomorrow['temperature_min'] if tomorrow is not none and 'temperature_min' in tomorrow else (tomorrow['temp_low'] if tomorrow is not none and 'temp_low' in tomorrow else (tomorrow['min_temp'] if tomorrow is not none and 'min_temp' in tomorrow else (tomorrow['low'] if tomorrow is not none and 'low' in tomorrow else ''))))))))) %}"
-    "{% set item_unit = today['temperature_unit'] if today is not none and 'temperature_unit' in today else (today['native_temperature_unit'] if today is not none and 'native_temperature_unit' in today else (today['unit_of_measurement'] if today is not none and 'unit_of_measurement' in today else (today['native_unit_of_measurement'] if today is not none and 'native_unit_of_measurement' in today else (today['unit'] if today is not none and 'unit' in today else (tomorrow['temperature_unit'] if tomorrow is not none and 'temperature_unit' in tomorrow else (tomorrow['native_temperature_unit'] if tomorrow is not none and 'native_temperature_unit' in tomorrow else (tomorrow['unit_of_measurement'] if tomorrow is not none and 'unit_of_measurement' in tomorrow else (tomorrow['native_unit_of_measurement'] if tomorrow is not none and 'native_unit_of_measurement' in tomorrow else (tomorrow['unit'] if tomorrow is not none and 'unit' in tomorrow else ''))))))))) %}"
-    "{{ today_high }}|{{ today_low }}|{{ tomorrow_high }}|{{ tomorrow_low }}|"
-    "{{ entity_response['temperature_unit'] if entity_response is not none and 'temperature_unit' in entity_response else (entity_response['native_temperature_unit'] if entity_response is not none and 'native_temperature_unit' in entity_response else (entity_response['unit_of_measurement'] if entity_response is not none and 'unit_of_measurement' in entity_response else (entity_response['native_unit_of_measurement'] if entity_response is not none and 'native_unit_of_measurement' in entity_response else (entity_response['unit'] if entity_response is not none and 'unit' in entity_response else (item_unit or state_attr(entity, 'temperature_unit') or state_attr(entity, 'native_temperature_unit') or state_attr(entity, 'unit_of_measurement') or ''))))) }}";
+    "{% set high_keys = ['temperature','native_temperature','temperature_high','native_temperature_high','high_temperature','max_temperature','temperature_max','temp_high','max_temp','high'] %}"
+    "{% set low_keys = ['templow','native_templow','temperature_low','native_temperature_low','low_temperature','min_temperature','temperature_min','temp_low','min_temp','low'] %}"
+    "{% set unit_keys = ['temperature_unit','native_temperature_unit','unit_of_measurement','native_unit_of_measurement','unit'] %}"
+    "{% set out = namespace(today_high='', today_low='', tomorrow_high='', tomorrow_low='', unit='') %}"
+    "{% for key in high_keys %}{% if out.today_high == '' and today is not none and key in today %}{% set out.today_high = today[key] %}{% endif %}{% if out.tomorrow_high == '' and tomorrow is not none and key in tomorrow %}{% set out.tomorrow_high = tomorrow[key] %}{% endif %}{% endfor %}"
+    "{% for key in low_keys %}{% if out.today_low == '' and today is not none and key in today %}{% set out.today_low = today[key] %}{% endif %}{% if out.tomorrow_low == '' and tomorrow is not none and key in tomorrow %}{% set out.tomorrow_low = tomorrow[key] %}{% endif %}{% endfor %}"
+    "{% for key in unit_keys %}{% if out.unit == '' and key in entity_response %}{% set out.unit = entity_response[key] %}{% endif %}{% if out.unit == '' and today is not none and key in today %}{% set out.unit = today[key] %}{% endif %}{% if out.unit == '' and tomorrow is not none and key in tomorrow %}{% set out.unit = tomorrow[key] %}{% endif %}{% endfor %}"
+    "{{ out.today_high }}|{{ out.today_low }}|{{ out.tomorrow_high }}|{{ out.tomorrow_low }}|"
+    "{{ out.unit or state_attr(entity, 'temperature_unit') or state_attr(entity, 'native_temperature_unit') or state_attr(entity, 'unit_of_measurement') or '' }}";
 }
 
 inline uint32_t next_weather_forecast_call_id() {
@@ -2063,6 +2065,18 @@ inline void request_weather_forecast_entity(const std::string &entity_id,
     apply_weather_forecast_unavailable_for_entity(entity_id);
     return;
   }
+#ifdef ESP_PLATFORM
+  size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  if (internal_free < HA_ACTION_INTERNAL_FREE_MIN_BYTES ||
+      internal_largest < HA_ACTION_INTERNAL_LARGEST_MIN_BYTES) {
+    ESP_LOGW("weather_forecast",
+             "Deferring forecast request for %s: internal heap free=%u largest=%u",
+             entity_id.c_str(), (unsigned) internal_free, (unsigned) internal_largest);
+    weather_forecast_schedule_retry(entity_id, day, "low internal heap");
+    return;
+  }
+#endif
 
   esphome::api::HomeassistantActionRequest req;
   uint32_t call_id = next_weather_forecast_call_id();
@@ -2222,8 +2236,7 @@ inline const char *garage_card_label(const ParsedCfg &p) {
 }
 
 inline bool garage_card_show_status(const ParsedCfg &p) {
-  return !garage_command_mode(p.sensor) &&
-    normalize_garage_label_display(cfg_option_value(p.options, "label_display")) == "status";
+  return normalize_garage_label_display(cfg_option_value(p.options, "label_display")) == "status";
 }
 
 inline bool alarm_card_show_status_icon(const ParsedCfg &p) {

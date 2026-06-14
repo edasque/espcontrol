@@ -1225,7 +1225,6 @@
     "image": {
       "label": "Camera Card",
       "allowInSubpage": true,
-      "experimental": "developer",
       "domains": ["camera", "image"],
       "options": [
         {

@@ -16,9 +16,8 @@ substitutions:
 # ---------------------------------------------------------------------------
 esp32:
   variant: esp32p4
-  # Keep OTA app slots inside the first 16MB. Some existing ESP32-P4 86
-  # bootloaders cannot boot OTA images that cross the 16MB flash boundary.
-  flash_size: 16MB
+  # Waveshare documents this panel with 32MB external NOR flash.
+  flash_size: 32MB
   cpu_frequency: 360MHZ
   engineering_sample: true
   framework:
@@ -194,7 +193,8 @@ light:
             condition:
               lambda: |-
                 auto now = panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now());
-                return id(screen_schedule_asleep) ||
+                return (id(screen_schedule_asleep) &&
+                        !screen_schedule_clock_mode(id(schedule_mode).current_option())) ||
                        screen_schedule_waiting_for_time(
                          id(screen_schedule_trigger).state,
                          id(schedule_enabled).state,

@@ -128,7 +128,6 @@ struct ClimateControlModalUi {
   lv_obj_t *target_lbl = nullptr;
   lv_obj_t *unit_lbl = nullptr;
   lv_obj_t *status_lbl = nullptr;
-  lv_obj_t *hint_lbl = nullptr;
   lv_obj_t *target_chip = nullptr;
   lv_obj_t *minus_btn = nullptr;
   lv_obj_t *plus_btn = nullptr;
@@ -1058,7 +1057,6 @@ inline void climate_set_dial_controls_visible(bool visible) {
   climate_set_obj_visible(ui.handle_dot, show_handle);
   climate_set_obj_visible(ui.target_row, visible);
   climate_set_obj_visible(ui.status_lbl, visible);
-  climate_set_obj_visible(ui.hint_lbl, visible);
   climate_set_obj_visible(ui.target_chip, visible);
   climate_set_obj_visible(ui.minus_btn, visible);
   climate_set_obj_visible(ui.plus_btn, visible);
@@ -1324,11 +1322,6 @@ inline void climate_control_set_modal_value(ClimateControlCtx *ctx) {
     }
   }
   bool dual = temp_enabled && climate_dual_target(ctx);
-  if (ui.hint_lbl) {
-    lv_label_set_text(ui.hint_lbl, dual ? (ctx->edit_high ? espcontrol_i18n("High target") : espcontrol_i18n("Low target")) : "");
-    if (dual) lv_obj_clear_flag(ui.hint_lbl, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(ui.hint_lbl, LV_OBJ_FLAG_HIDDEN);
-  }
   climate_update_target_chip(ui.target_chip, ctx, dual);
   climate_set_obj_visible(ui.minus_btn, true);
   climate_set_obj_visible(ui.plus_btn, true);
@@ -1401,7 +1394,6 @@ inline void climate_control_layout_modal(ClimateControlCtx *ctx) {
   climate_raise_arc_markers();
   lv_obj_align(ui.status_lbl, LV_ALIGN_CENTER, 0, title_center_y);
   lv_obj_align(ui.target_row, LV_ALIGN_CENTER, 0, value_center_y);
-  lv_obj_align(ui.hint_lbl, LV_ALIGN_CENTER, 0, controls_center_y - layout.btn_size / 2 - 50);
   lv_obj_set_style_translate_y(ui.unit_lbl,
     control_modal_scaled_px(MEDIA_VOLUME_UNIT_Y_REF_PX, layout.short_side), LV_PART_MAIN);
   ControlModalLayout controls_layout = layout;
@@ -1696,11 +1688,6 @@ inline void climate_control_open_modal(ClimateControlCtx *ctx) {
   lv_obj_set_style_text_color(ui.status_lbl, lv_color_hex(DARK_TEXT_MUTED), LV_PART_MAIN);
   lv_obj_set_style_text_align(ui.status_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
   if (ctx->label_font) lv_obj_set_style_text_font(ui.status_lbl, ctx->label_font, LV_PART_MAIN);
-
-  ui.hint_lbl = lv_label_create(ui.panel);
-  lv_obj_set_style_text_color(ui.hint_lbl, lv_color_hex(DARK_TEXT_MUTED), LV_PART_MAIN);
-  lv_obj_set_style_text_align(ui.hint_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-  if (ctx->label_font) lv_obj_set_style_text_font(ui.hint_lbl, ctx->label_font, LV_PART_MAIN);
 
   ui.minus_btn = control_modal_create_round_button(ui.panel, 72, find_icon("Minus"), ctx->icon_font,
     DARK_CONTROL_NEUTRAL, DARK_BACKGROUND_TERTIARY, ctx->width_compensation_percent);
