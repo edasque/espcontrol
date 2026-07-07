@@ -1496,7 +1496,7 @@ inline void grid_phase2(
       SolarCardCtx *ctx = create_solar_card_context(
         s, p,
         has_on ? on_val : DEFAULT_SLIDER_COLOR,
-        has_off ? off_val : DEFAULT_OFF_COLOR,
+        off_val,
         display_sensor_font(display),
         lv_obj_get_style_text_font(s.text_lbl, LV_PART_MAIN),
         display_climate_card_icon_font(display),
@@ -1510,7 +1510,7 @@ inline void grid_phase2(
         HaCalendarCardCtx *ctx = create_ha_calendar_card_context(
           s, p,
           has_on ? on_val : DEFAULT_SLIDER_COLOR,
-          has_off ? off_val : DEFAULT_OFF_COLOR,
+          off_val,
           display_sensor_font(display),
           lv_obj_get_style_text_font(s.text_lbl, LV_PART_MAIN),
           display_media_title_font_or(
@@ -2258,7 +2258,7 @@ inline void grid_phase2(
         SolarCardCtx *ctx = create_solar_card_context(
           sub_slot, sb_cfg,
           has_on ? on_val : DEFAULT_SLIDER_COLOR,
-          has_off ? off_val : DEFAULT_OFF_COLOR,
+          off_val,
           display_sensor_font(display),
           lv_obj_get_style_text_font(sub_slot.text_lbl, LV_PART_MAIN),
           display_climate_card_icon_font(display),
@@ -2272,7 +2272,7 @@ inline void grid_phase2(
           HaCalendarCardCtx *ctx = create_ha_calendar_card_context(
             sub_slot, sb_cfg,
             has_on ? on_val : DEFAULT_SLIDER_COLOR,
-            has_off ? off_val : DEFAULT_OFF_COLOR,
+            off_val,
             display_sensor_font(display),
             lv_obj_get_style_text_font(sub_slot.text_lbl, LV_PART_MAIN),
             display_media_title_font_or(

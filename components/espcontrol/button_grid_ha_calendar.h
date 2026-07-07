@@ -251,6 +251,13 @@ inline void ha_calendar_set_title(HaCalendarCardCtx *ctx, const char *text) {
   lv_label_set_text(ctx->label_lbl, text ? text : "");
 }
 
+// Dim the card when its calendar entities are unavailable, without disabling
+// interaction — the modal still opens to show whatever is cached.
+inline void ha_calendar_dim_for_availability(lv_obj_t *btn, bool available) {
+  if (!btn) return;
+  lv_obj_set_style_opa(btn, available ? LV_OPA_COVER : LV_OPA_50, LV_PART_MAIN);
+}
+
 inline void ha_calendar_apply_card_face(HaCalendarCardCtx *ctx) {
   if (!ha_calendar_ctx_valid(ctx)) return;
   if (!ctx->value_lbl || !ctx->label_lbl) return;
@@ -262,7 +269,7 @@ inline void ha_calendar_apply_card_face(HaCalendarCardCtx *ctx) {
     if (e.available) { any_available = true; break; }
   }
   ctx->available = any_available;
-  apply_control_availability(ctx->btn, ctx->btn, ctx->available, false);
+  ha_calendar_dim_for_availability(ctx->btn, ctx->available);
 
   lv_label_set_text(ctx->label_lbl, ha_calendar_card_label(ctx).c_str());
 
@@ -647,7 +654,6 @@ inline bool ha_calendar_parse_local_timestamp(esphome::StringRef value, time_t &
 
 inline void subscribe_ha_calendar_state(HaCalendarCardCtx *ctx) {
   if (!ha_calendar_ctx_valid(ctx)) return;
-  register_ha_control_availability(ctx->btn, ctx->btn, false);
   for (size_t i = 0; i < ctx->entities.size(); i++) {
     if (ctx->entities[i].entity_id.empty()) continue;
     ha_subscribe_state(ctx->entities[i].entity_id,
@@ -657,7 +663,7 @@ inline void subscribe_ha_calendar_state(HaCalendarCardCtx *ctx) {
         ctx->entities[i].active = !unavail && (state == "on");
         bool any = false;
         for (const auto &e : ctx->entities) if (e.available) { any = true; break; }
-        apply_control_availability(ctx->btn, ctx->btn, any, false);
+        ha_calendar_dim_for_availability(ctx->btn, any);
         // Next mode: re-poll get_events whenever the state changes — both on the
         // first state after boot and at every event boundary (an event starting
         // or ending flips this state). Otherwise the tile lingers on "Now" with
