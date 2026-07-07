@@ -5,7 +5,7 @@ function lockCommandMode(mode) {
 
 function lockModeOptionValues() {
   var spec = cardContractOptionSpec("lock", "lock_mode");
-  return spec && spec.values ? spec.values.slice() : ["", "lock", "unlock"];
+  return spec && spec.values ? spec.values.slice() : [];
 }
 
 function normalizeLockMode(mode) {
@@ -64,7 +64,6 @@ registerButtonType("lock", {
   label: function () { return cardContractCardLabel("lock"); },
   allowInSubpage: function () { return cardContractAllowInSubpage("lock"); },
   pickerKey: function () { return cardContractPickerKey("lock"); },
-  experimental: function () { return cardContractExperimental("lock"); },
   hidden: function () { return cardContractHidden("lock"); },
   hideLabel: true,
   defaultConfig: function () { return cardContractDefaultConfig("lock"); },

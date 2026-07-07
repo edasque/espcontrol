@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'devices/manifest.json'
+      - 'scripts/check_public_firmware.py'
+      - 'scripts/prune_actions_cache.sh'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/pages.yml'
@@ -37,7 +40,7 @@ jobs:
       - name: Prepare self-hosted workspace
         run: rm -rf "${GITHUB_WORKSPACE}/.esphome" || sudo rm -rf "${GITHUB_WORKSPACE}/.esphome"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.0
       - run: git sparse-checkout disable || true
 
       - uses: actions/setup-node@v6
@@ -70,7 +73,7 @@ jobs:
       - name: Prepare self-hosted workspace
         run: rm -rf "${GITHUB_WORKSPACE}/.esphome" || sudo rm -rf "${GITHUB_WORKSPACE}/.esphome"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.0
         with:
           sparse-checkout: devices/manifest.json
           sparse-checkout-cone-mode: false
@@ -254,7 +257,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.0
         with:
           sparse-checkout: |
             devices/manifest.json

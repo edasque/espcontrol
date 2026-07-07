@@ -12,6 +12,7 @@ const SOURCE = path.join(ROOT, "src", "webserver", "entry.js");
 const DEVICE_MANIFEST = path.join(ROOT, "devices", "manifest.json");
 const WEB_OUTPUT_DIR = path.join(ROOT, "docs", "public", "webserver");
 const ALL_ROTATIONS = ["0", "90", "180", "270"];
+const REQUIRED_HOOK_GROUPS = ["config", "preview", "backup", "settings"];
 
 function createWebSandbox() {
   const domEvents = [];
@@ -39,7 +40,15 @@ function loadHooks() {
   const sandbox = createWebSandbox();
   vm.createContext(sandbox);
   vm.runInContext(loadBundledWebSource(), sandbox, { filename: SOURCE });
+  assertRequiredHookGroups(sandbox.__ESPCONTROL_TEST_HOOKS__.groups);
   return sandbox.__ESPCONTROL_TEST_HOOKS__.config;
+}
+
+function assertRequiredHookGroups(groups, prefix = "web test hooks") {
+  assert(groups, `${prefix} must expose grouped hook registrations`);
+  for (const group of REQUIRED_HOOK_GROUPS) {
+    assert(groups[group], `${prefix} must include the ${group} hook group`);
+  }
 }
 
 function plain(value) {
@@ -51,6 +60,20 @@ function assertGeneratedRotationOptions(slug, generated, key, options) {
     generated.includes(`${key}:${JSON.stringify(options)}`),
     `${slug}: generated web UI must include ${key} ${JSON.stringify(options)}`
   );
+}
+
+function assertGeneratedConfigValue(slug, generated, key, value) {
+  assert(
+    generated.includes(`${key}:${JSON.stringify(value)}`),
+    `${slug}: generated web UI must include ${key} ${JSON.stringify(value)}`
+  );
+}
+
+function generatedDeviceId(generated) {
+  const readable = generated.match(/\bvar\s+DEVICE_ID\s*=\s*"([^"]+)"/);
+  if (readable) return readable[1];
+  const minified = generated.match(/^\(function\(\)\{var\s+[A-Za-z_$][\w$]*="([^"]+)",[A-Za-z_$][\w$]*=\{/);
+  return minified && minified[1];
 }
 
 const hooks = loadHooks();
@@ -71,6 +94,10 @@ assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.clockBarTime), [
   "switch-screen_clock_bar_time",
   "switch-clock_bar_time_enabled",
 ], "clock bar time SSE aliases are registered together");
+assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.voiceServices), [
+  "switch-voice_services",
+  "switch-voice_services_enabled",
+], "voice services SSE aliases are registered together");
 assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.scheduleWakeTimeout), [
   "number-screen__schedule_wake_timeout",
   "number-screen_schedule_wake_timeout",
@@ -93,6 +120,9 @@ assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.trackOverlayDuration), 
   "number-track_overlay_duration",
   "number-screen_saver__show_track_overlay",
 ], "cover art track-overlay SSE aliases are registered together");
+assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.homeAssistantArtworkPort), [
+  "number-home_assistant_artwork_port",
+], "Home Assistant artwork port SSE aliases are registered together");
 assert(
   Array.from(hooks.entityLookupNames("screen_saver_hide_cover_art_external_input")).includes("screen_saver__hide_cover_art_on_external_input"),
   "cover art external-input post aliases include the full generated object id"
@@ -109,10 +139,32 @@ assert.deepStrictEqual(Array.from(hooks.coverArtHideExternalInputPostUrls(false)
   "/switch/screen_saver__hide_for_external_sources/turn_off",
   "/switch/Screen%20Saver%3A%20Hide%20for%20external%20sources/turn_off",
 ], "cover art external-input posts include all firmware object id aliases");
+assert.deepStrictEqual(Array.from(hooks.coverArtDelayPostUrls(30)), [
+  "/number/screen_saver__cover_art_delay/set?value=30",
+  "/number/screen_saver_cover_art_delay/set?value=30",
+  "/number/cover_art_delay/set?value=30",
+  "/number/Screen%20Saver%3A%20Cover%20Art%20Delay/set?value=30",
+], "cover art delay posts include all firmware object id aliases");
 assert(
   Array.from(hooks.entityLookupNames("screen_saver_track_overlay_duration")).includes("screen_saver__show_track_overlay"),
   "cover art track-overlay post aliases include the legacy show-track-overlay object id"
 );
+assert.deepStrictEqual(Array.from(hooks.coverArtTrackOverlayDurationPostUrls(15)), [
+  "/number/screen_saver__track_overlay_duration/set?value=15",
+  "/number/screen_saver_track_overlay_duration/set?value=15",
+  "/number/track_overlay_duration/set?value=15",
+  "/number/screen_saver__show_track_overlay/set?value=15",
+  "/number/Screen%20Saver%3A%20Show%20Track%20Overlay/set?value=15",
+], "cover art track-overlay posts include all firmware object id aliases");
+assert.deepStrictEqual(Array.from(hooks.homeAssistantArtworkPortPostUrls(80)), [
+  "/number/home_assistant_artwork_port/set?value=80",
+  "/number/Home%20Assistant%20Artwork%20Port/set?value=80",
+], "Home Assistant artwork port posts include object id and entity name fallbacks");
+assert.deepStrictEqual(Array.from(hooks.voiceServicesPostUrls(true)), [
+  "/switch/voice_services/turn_on",
+  "/switch/voice_services_enabled/turn_on",
+  "/switch/Voice%20Services/turn_on",
+], "voice services posts include object id aliases and entity name fallback");
 assert.strictEqual(hooks.clockBarVisibleInPreviewFor(true, "off"), true, "clock bar preview is visible when enabled");
 assert.strictEqual(hooks.clockBarVisibleInPreviewFor(true, "dim"), true, "clock bar preview stays visible for dimmed screen saver");
 assert.strictEqual(hooks.clockBarVisibleInPreviewFor(true, "clock"), true, "clock bar preview stays visible when clock screen saver is configured");
@@ -133,11 +185,29 @@ assert.strictEqual(hooks.removedLegacyStateEvent({
   id: "text-screen_saver__cover_art_entity",
   state: "media_player.living_room",
 }), false, "current cover art entity events are not treated as removed legacy events");
+assert.deepStrictEqual(plain(hooks.firmwareFailureStatusFor("Could not download firmware file (404).")), {
+  error: "Firmware update failed: Could not download firmware file (404).",
+  updateState: "",
+  installStatus: "",
+}, "firmware update failures leave a visible status reason");
 
 const manifest = JSON.parse(fs.readFileSync(DEVICE_MANIFEST, "utf8"));
 for (const [slug, device] of Object.entries(manifest.devices || {})) {
   const webOutput = path.join(WEB_OUTPUT_DIR, slug, "www.js");
   const generated = fs.readFileSync(webOutput, "utf8");
+  assertGeneratedConfigValue(slug, generated, "slots", device.slots);
+  assertGeneratedConfigValue(slug, generated, "cols", device.layout.cols);
+  assertGeneratedConfigValue(slug, generated, "rows", device.layout.rows);
+  assertGeneratedConfigValue(slug, generated, "screenSize", device.public.screenSize);
+  assert.strictEqual(
+    generatedDeviceId(generated),
+    slug,
+    `${slug}: generated web UI must be built with the matching device id`
+  );
+  assertGeneratedConfigValue(slug, generated, "slots", device.slots);
+  assertGeneratedConfigValue(slug, generated, "cols", device.layout.cols);
+  assertGeneratedConfigValue(slug, generated, "rows", device.layout.rows);
+  assertGeneratedConfigValue(slug, generated, "screenSize", device.public.screenSize);
   const sandbox = createWebSandbox();
   vm.createContext(sandbox);
   vm.runInContext(generated, sandbox, { filename: webOutput });
@@ -145,6 +215,7 @@ for (const [slug, device] of Object.entries(manifest.devices || {})) {
     sandbox.__ESPCONTROL_TEST_HOOKS__.config,
     `${slug}: generated web UI must export the same test hooks used by local checks`
   );
+  assertRequiredHookGroups(sandbox.__ESPCONTROL_TEST_HOOKS__.groups, `${slug}: generated web UI`);
   const generatedHooks = sandbox.__ESPCONTROL_TEST_HOOKS__.config;
   const expectedScreenSize = String(device.public.screenSize)
     .toLowerCase()
@@ -162,10 +233,45 @@ for (const [slug, device] of Object.entries(manifest.devices || {})) {
     generatedTimezones.includes("UTC (GMT+0)") && generatedTimezones.includes("Europe/London (GMT+0)"),
     `${slug}: generated web UI must include fallback timezone choices`
   );
+  assert.strictEqual(
+    generatedTimezones[0],
+    "Pacific/Midway (GMT-11)",
+    `${slug}: Auto timezone must not shift restored timezone indices on OTA`
+  );
+  assert.strictEqual(
+    generatedTimezones[generatedTimezones.length - 1],
+    "Auto (Home Assistant)",
+    `${slug}: Auto timezone remains available as the new-install default option`
+  );
   assert(
     Array.from(generatedHooks.timezoneOptionsWithFallback([], "Custom/Zone (GMT+0)")).includes("Custom/Zone (GMT+0)"),
     `${slug}: timezone fallback must preserve the selected value`
   );
+  assert(
+    !Array.from(generatedHooks.timezoneOptionsWithFallback(["UTC (GMT+0)"], "Auto (Home Assistant)")).includes("Auto (Home Assistant)"),
+    `${slug}: timezone fallback must not add Auto when firmware options do not advertise it`
+  );
+  assert(
+    Array.from(generatedHooks.timezoneOptionsWithFallback(["UTC (GMT+0)"], "Auto (Home Assistant)", true)).includes("Auto (Home Assistant)"),
+    `${slug}: timezone fallback must preserve restored Auto timezone selections`
+  );
+  if (((device.web || {}).disabledCardTypes || []).includes("weather_forecast")) {
+    assert.deepStrictEqual(
+      Array.from(generatedHooks.weatherModeOptionValues()),
+      [""],
+      `${slug}: generated web UI must hide weather forecast modes when forecast cards are disabled`
+    );
+    assert.strictEqual(
+      generatedHooks.normalizeWeatherCardMode("today"),
+      "",
+      `${slug}: generated web UI must normalize forecast weather cards back to current conditions`
+    );
+    assert.strictEqual(
+      generatedHooks.weatherCardIsForecastMode({ precision: "today" }),
+      false,
+      `${slug}: generated web UI must not preview disabled weather forecast modes`
+    );
+  }
   assert(
     sandbox.__domEvents.some((event) => event.type === "DOMContentLoaded" && typeof event.listener === "function"),
     `${slug}: generated web UI must register DOMContentLoaded startup wiring`
@@ -243,11 +349,53 @@ const confirmationOnRoundTrip = hooks.parseButtonConfig(hooks.serializeButtonCon
 }));
 assert.strictEqual(hooks.switchConfirmationMode(confirmationOnRoundTrip), "on");
 assert.strictEqual(hooks.switchConfirmationMessage(confirmationOnRoundTrip), "Turn on this device?");
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("alarm", false, false), true);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("alarm", true, false), true);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("alarm", true, true), true);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("alarm_action", false, false), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("alarm_action", false, true), false);
+const scriptConfirmationButton = {
+  entity: "script.goodnight",
+  label: "Goodnight",
+  icon: "Script Text Play",
+  icon_on: "Auto",
+  sensor: "script.turn_on",
+  unit: "",
+  type: "action",
+  precision: "",
+  options: "confirm_on,confirm_message=Run bedtime?,confirm_yes=Run,confirm_no=Cancel",
+};
+const scriptConfirmationRoundTrip = hooks.parseButtonConfig(hooks.serializeButtonConfig(scriptConfirmationButton));
+assert.deepStrictEqual(plain(scriptConfirmationRoundTrip), scriptConfirmationButton);
+assert.strictEqual(hooks.actionScriptConfirmationEnabled(scriptConfirmationRoundTrip), true);
+assert.strictEqual(hooks.actionScriptConfirmationMessage(scriptConfirmationRoundTrip), "Run bedtime?");
+assert.strictEqual(hooks.actionScriptConfirmationYesText(scriptConfirmationRoundTrip), "Run");
+assert.strictEqual(hooks.actionScriptConfirmationNoText(scriptConfirmationRoundTrip), "Cancel");
+const scriptConfirmationDefaultRoundTrip = hooks.parseButtonConfig(hooks.serializeButtonConfig({
+  entity: "script.goodnight",
+  label: "Goodnight",
+  icon: "Script Text Play",
+  icon_on: "Auto",
+  sensor: "script.turn_on",
+  unit: "",
+  type: "action",
+  precision: "",
+  options: "confirm_on",
+}));
+assert.strictEqual(hooks.actionScriptConfirmationMessage(scriptConfirmationDefaultRoundTrip), "Run this script?");
+const sceneWithStaleConfirmation = hooks.parseButtonConfig(hooks.serializeButtonConfig({
+  entity: "scene.goodnight",
+  label: "Goodnight",
+  icon: "Movie Open",
+  icon_on: "Auto",
+  sensor: "scene.turn_on",
+  unit: "",
+  type: "action",
+  precision: "",
+  options: "confirm_on,confirm_message=Run bedtime?",
+}));
+assert.strictEqual(sceneWithStaleConfirmation.options, "", "non-script action cards drop script confirmation options");
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("alarm", false), true);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("alarm", true), true);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("alarm_action", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("alarm_action", true), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("local_sensor", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("local_sensor", true), false);
 const infoOnlyPickerKeys = Array.from(hooks.buttonTypePickerKeysForInfoOnly(true));
 assert(infoOnlyPickerKeys.includes("sensor"), "info-only displays can still add sensor cards");
 assert(infoOnlyPickerKeys.includes("weather"), "info-only displays can still add weather cards");
@@ -270,33 +418,114 @@ assert(
   hooks.buttonTypePreviewFor("alarm", { label: "Alarm", icon: "Security", type: "alarm" }).iconHtml.includes("mdi-shield-off"),
   "alarm preview defaults to the status icon"
 );
+const mediaControlPickerOption = pickerOptions.find((option) => option.key === "media_control");
+assert(mediaControlPickerOption, "media control appears as a top-level card picker shortcut");
+assert.strictEqual(mediaControlPickerOption.label, "All Controls", "media control picker option has a clear label");
+assert.strictEqual(
+  hooks.defaultButtonTypeForPicker("media_control"),
+  "media",
+  "media control picker shortcut still saves as the media card type"
+);
+assert(
+  Array.from(hooks.mediaModeOptionValues()).includes("control_modal"),
+  "media mode options include the media control modal subtype"
+);
+assert.strictEqual(
+  Array.from(hooks.mediaModeOptionValues())[0],
+  "control_modal",
+  "all media controls appears first in the media mode list"
+);
+const mediaControlIconPreview = hooks.buttonTypePreviewFor("media", {
+  label: "All Controls",
+  icon: "Music",
+  sensor: "control_modal",
+  type: "media",
+});
+assert(
+  mediaControlIconPreview.iconHtml.includes("mdi-music"),
+  "all controls preview uses the selected custom icon"
+);
+const mediaControlConfig = hooks.parseButtonConfig(hooks.serializeButtonConfig({
+  entity: "media_player.living_room",
+  label: "Speaker",
+  icon: "Auto",
+  icon_on: "Auto",
+  sensor: "control_modal",
+  unit: "",
+  type: "media",
+  precision: "",
+  options: "label_display=status,number_display=volume",
+}));
+assert.strictEqual(
+  mediaControlConfig.options,
+  "number_display=volume",
+  "media control parent card display options survive normalization"
+);
+assert.strictEqual(hooks.mediaLabelDisplayMode(mediaControlConfig), "status");
+assert.strictEqual(hooks.mediaNumberDisplayMode(mediaControlConfig), "volume");
+const mediaControlLabelConfig = hooks.parseButtonConfig(hooks.serializeButtonConfig({
+  entity: "media_player.living_room",
+  label: "Speaker",
+  icon: "Auto",
+  icon_on: "Auto",
+  sensor: "control_modal",
+  unit: "",
+  type: "media",
+  precision: "",
+  options: "label_display=label",
+}));
+assert.strictEqual(mediaControlLabelConfig.options, "label_display=label");
+assert.strictEqual(hooks.mediaLabelDisplayMode(mediaControlLabelConfig), "label");
+const mediaControlPreview = hooks.buttonTypePreviewFor("media", mediaControlConfig);
+assert(
+  mediaControlPreview.iconHtml.includes("sp-sensor-preview"),
+  "media control volume display previews as a top-left number"
+);
+assert(
+  mediaControlPreview.labelHtml.includes("Playing"),
+  "media control status label preview uses player state text"
+);
 assert(
   hooks.buttonTypePreviewFor("alarm", { label: "Alarm", icon: "Alarm", type: "alarm", options: "icon_display=static" }).iconHtml.includes("mdi-bell-ring"),
   "alarm preview uses the selected Alarm icon"
 );
-assert.deepStrictEqual(Array.from(hooks.alarmCardTypeOptionValues(false)), ["control_panel", "away", "home", "disarm"]);
-assert.deepStrictEqual(Array.from(hooks.alarmCardTypeOptionValues(true)), ["control_panel", "away", "home", "disarm"]);
+assert(
+  hooks.buttonTypePreviewFor("sensor", { type: "sensor", sensor: "local", entity: "room_temp", unit: "°C", precision: "1" }).iconHtml.includes("0.0"),
+  "sensor preview renders the local sensor subtype"
+);
+assert.deepStrictEqual(Array.from(hooks.alarmCardTypeOptionValues(false)), ["control_panel", "away", "home", "night", "vacation", "disarm"]);
+assert.deepStrictEqual(Array.from(hooks.alarmCardTypeOptionValues(true)), ["control_panel", "away", "home", "night", "vacation", "disarm"]);
 assert.deepStrictEqual(Array.from(hooks.alarmVisibleActions(hooks.parseButtonConfig(
   "alarm_control_panel.house;House;Security;Auto;;;alarm;;actions=away%7Cdisarm"
 ))), ["away", "disarm"]);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_speed", false, false), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_speed", true, false), true);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_speed", true, true), true);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_switch", true, false), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("fan_oscillate", true, true), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("option_select", false, false), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("option_select", false, true), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("todo", false, false), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("todo", true, false), false);
-assert.strictEqual(hooks.buttonTypeVisibleInPickerForExperimental("todo", true, true), false);
+assert.deepStrictEqual(Array.from(hooks.alarmVisibleActions(hooks.parseButtonConfig(
+  "alarm_control_panel.house;House;Security;Auto;;;alarm;;actions=night%7Cvacation"
+))), ["night", "vacation"]);
+assert.deepStrictEqual(Array.from(hooks.alarmVisibleActions(hooks.parseButtonConfig(
+  "alarm_control_panel.house;House;Security;Auto;;;alarm;;actions=away%7Chome%7Cnight%7Cvacation%7Cdisarm"
+))), ["away", "home", "night"]);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_speed", false), true);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_speed", true), true);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_control", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_control", true), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_switch", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_oscillate", true), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("option_select", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("option_select", true), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("todo", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("todo", true), false);
 assert(
-  hooks.buttonTypePickerKeysForExperimental(false, false, "fan_speed").includes("fan_speed"),
-  "saved fan cards remain represented while hidden"
+  hooks.buttonTypePickerKeysFor(false, "fan_speed").includes("fan_speed"),
+  "fan cards are available"
 );
 assert(!hooks.buttonTypeRuntimeSpec("todo"), "todo card type is not registered");
 
 assert.strictEqual(hooks.normalizeTemperatureUnit("fahrenheit"), "\u00b0F");
 assert.strictEqual(hooks.normalizeTemperatureUnit("centigrade"), "\u00b0C");
+assert.strictEqual(hooks.normalizeHomeAssistantArtworkPort("80"), 80);
+assert.strictEqual(hooks.normalizeHomeAssistantArtworkPort(""), 8123);
+assert.strictEqual(hooks.normalizeHomeAssistantArtworkPort(0), 1);
+assert.strictEqual(hooks.normalizeHomeAssistantArtworkPort(70000), 65535);
 const climatePreviewButton = {
   entity: "climate.home",
   label: "Home",
@@ -330,6 +559,11 @@ const climatePreviewAuto = hooks.buttonTypePreviewFor("climate", climatePreviewB
   timezone: "America/New_York (GMT-5)",
 });
 assert(climatePreviewAuto.iconHtml.includes("\u00b0F"), "climate preview follows Auto timezone unit");
+assert.strictEqual(
+  hooks.temperatureUnitSymbolFor("Auto (Home Assistant)", "Auto", "America/New_York"),
+  "\u00b0F",
+  "Auto temperature unit follows the published active timezone"
+);
 const climateLabelPreview = hooks.buttonTypePreviewFor("climate", {
   ...climatePreviewButton,
   options: "label_display=actual",
@@ -359,8 +593,8 @@ const datePreview = hooks.buttonTypePreviewFor("calendar", {
 });
 assert(datePreview.labelHtml.includes("mdi-calendar-month"), "date preview uses the calendar badge");
 assert(datePreview.iconHtml.includes("sp-sensor-preview"), "date preview uses the shared sensor preview");
-const frenchMonth = new Intl.DateTimeFormat("fr", { month: "long" }).format(new Date());
-const frenchDatePreview = hooks.buttonTypePreviewFor("calendar", {
+const frenchMonth = new Intl.DateTimeFormat("fr", { month: "long" }).format(hooks.webserverMockNow());
+const frenchDatePreview = hooks.buttonTypePreviewForMockNow("calendar", {
   type: "calendar",
   precision: "",
   options: "",
@@ -437,6 +671,17 @@ const timezonePreview = hooks.buttonTypePreviewFor("timezone", {
 });
 assert(timezonePreview.labelHtml.includes("New York"), "world clock preview uses the city label");
 assert(timezonePreview.labelHtml.includes("mdi-map-clock"), "world clock preview uses the map clock badge");
+
+const autoTimezonePreview = hooks.buttonTypePreviewForMockNow("timezone", {
+  entity: "Auto (Home Assistant)",
+  type: "timezone",
+  options: "",
+}, {
+  activeTimezone: "America/New_York",
+  clockFormat: "24h",
+});
+assert(autoTimezonePreview.labelHtml.includes("New York"), "Auto world clock preview uses the published active timezone city");
+assert.strictEqual(previewSensorValue(autoTimezonePreview), "04:00", "Auto world clock preview uses the published active timezone time");
 
 const wideTimezonePreview = hooks.buttonTypePreviewFor("timezone", {
   entity: "America/New_York (GMT-5)",
@@ -642,6 +887,16 @@ const actionOptionPreview = hooks.buttonTypePreviewFor("action", {
 assert(actionOptionPreview.iconHtml.includes("Option"), "action option-select preview uses option text");
 assert(actionOptionPreview.labelHtml.includes("mdi-chevron-down"), "action option-select preview uses the dropdown badge");
 
+const localActionPreview = hooks.buttonTypePreviewFor("action", {
+  entity: "zoom_mute",
+  label: "Zoom Mute",
+  icon: "Gesture Tap",
+  sensor: "local",
+  type: "action",
+});
+assert(localActionPreview.iconHtml.includes("mdi-gesture-tap"), "local action subtype preview uses the local action icon");
+assert(localActionPreview.labelHtml.includes("mdi-chip"), "local action subtype preview uses the local action badge");
+
 const alarmActionPreview = hooks.buttonTypePreviewFor("alarm_action", {
   entity: "alarm_control_panel.house",
   label: "Arm Away",
@@ -659,6 +914,15 @@ const fanSpeedPreview = hooks.buttonTypePreviewFor("fan_speed", {
 });
 assert(fanSpeedPreview.iconHtml.includes("sp-slider-preview"), "fan speed preview keeps the slider preview");
 assert(fanSpeedPreview.labelHtml.includes("mdi-fan-speed-2"), "fan speed preview uses the speed badge");
+
+const fanControlPreview = hooks.buttonTypePreviewFor("fan_control", {
+  entity: "fan.bedroom",
+  label: "Bedroom Fan",
+  icon: "Fan",
+  type: "fan_control",
+});
+assert(!fanControlPreview.iconHtml.includes("sp-slider-preview"), "fan control preview is not an inline slider");
+assert(fanControlPreview.labelHtml.includes("mdi-fan"), "fan control preview uses the fan badge");
 
 const fanSwitchPreview = hooks.buttonTypePreviewFor("fan_switch", {
   entity: "fan.bedroom",
@@ -749,6 +1013,18 @@ const coverSliderPreview = hooks.buttonTypePreviewFor("cover", {
 });
 assert(coverSliderPreview.iconHtml.includes("sp-slider-preview"), "cover slider preview uses the slider track");
 assert(coverSliderPreview.labelHtml.includes("mdi-blinds-horizontal"), "cover slider preview uses the cover badge");
+
+const coverModalPreview = hooks.buttonTypePreviewFor("cover", {
+  entity: "cover.office_blind",
+  label: "Office Blind",
+  icon: "Blinds",
+  icon_on: "Blinds Open",
+  sensor: "modal",
+  type: "cover",
+});
+assert(coverModalPreview.iconHtml.includes("sp-slider-preview"), "cover modal preview shows read-only position track");
+assert(coverModalPreview.iconHtml.includes("mdi-blinds"), "cover modal preview uses the cover icon");
+assert(coverModalPreview.labelHtml.includes("mdi-blinds-horizontal"), "cover modal preview uses the cover badge");
 
 const coverCommandPreview = hooks.buttonTypePreviewFor("cover", {
   entity: "cover.office_blind",
@@ -925,6 +1201,55 @@ assert(subpagePresencePreview.iconHtml.includes("mdi-account"), "presence subpag
 assert(subpagePresencePreview.labelHtml.includes("Presence"), "presence subpage preset preview uses the Presence label");
 assert(subpagePresencePreview.labelHtml.includes("mdi-chevron-right"), "presence subpage preset preview shows the chevron badge");
 
+[
+  ["alarm", "alarm_control_panel.home", "mdi-shield-home", "Alarm"],
+  ["vacuum", "vacuum.downstairs", "mdi-robot-vacuum", "Vacuum"],
+  ["lawn_mower", "lawn_mower.backyard", "mdi-robot-mower", "Lawn Mower"],
+  ["weather", "weather.home", "mdi-weather-partly-cloudy", "Weather"],
+].forEach(([kind, entity, iconClass, label]) => {
+  const preview = hooks.buttonTypePreviewFor("subpage", {
+    entity,
+    sensor: "indicator",
+    type: "subpage",
+    options: `subpage_kind=${kind}`,
+  });
+  assert(preview.iconHtml.includes(iconClass), `${label} subpage preset preview uses the expected icon`);
+  assert(preview.labelHtml.includes(label), `${label} subpage preset preview uses the expected label`);
+  assert(preview.labelHtml.includes("mdi-chevron-right"), `${label} subpage preset preview shows the chevron badge`);
+});
+
+assert(hooks.buttonTypePickerKeysFor(false).includes("lawn_mower"), "lawn mower cards are available in the main picker");
+assert(hooks.buttonTypePickerKeysFor(true).includes("lawn_mower"), "lawn mower cards are available in subpages");
+assert.deepStrictEqual(plain(hooks.buttonTypeDefaultConfig("lawn_mower")), {
+  entity: "",
+  label: "",
+  icon: "Robot Mower",
+  icon_on: "Auto",
+  sensor: "start_mowing",
+  unit: "",
+  type: "lawn_mower",
+  precision: "",
+  options: "",
+}, "lawn mower default config matches the shared contract");
+assert.deepStrictEqual(
+  Array.from(hooks.cardContractOptions("lawn_mower").find((option) => option.name === "lawn_mower_mode").values),
+  ["status", "start_mowing", "dock", "pause_resume"],
+  "lawn mower mode values match the scoped service set"
+);
+const lawnMowerPreview = hooks.buttonTypePreviewFor("lawn_mower", {
+  entity: "lawn_mower.backyard",
+  label: "",
+  icon: "Auto",
+  icon_on: "Auto",
+  sensor: "bad_mode",
+  unit: "ignored",
+  type: "lawn_mower",
+  precision: "2",
+  options: "ignored",
+});
+assert(lawnMowerPreview.iconHtml.includes("mdi-robot-mower"), "lawn mower preview uses the robot mower icon");
+assert(lawnMowerPreview.labelHtml.includes("mdi-robot-mower"), "lawn mower preview badge uses the robot mower icon");
+
 const subpageCustomPresetPreview = hooks.buttonTypePreviewFor("subpage", {
   entity: "climate.living_room",
   label: "Downstairs",
@@ -1050,6 +1375,20 @@ assert.deepStrictEqual(
 assert.strictEqual(hooks.normalizeScreensaverAction("Screen Dimmed"), "dim");
 assert.strictEqual(hooks.previewHtmlValue({ labelHtml: "" }, "labelHtml", "fallback"), "");
 assert.strictEqual(hooks.previewHtmlValue({}, "labelHtml", "fallback"), "fallback");
+assert.strictEqual(hooks.webserverMockNow().toISOString(), "2026-01-01T09:00:00.000Z");
+assert.notStrictEqual(
+  hooks.webserverNow().toISOString(),
+  "2026-01-01T09:00:00.000Z",
+  "production web UI clock uses the real current time"
+);
+assert(
+  hooks.buttonTypePreviewForMockNow("clock", { type: "clock" }, { clockFormat: "24h" }).iconHtml.includes("09:00"),
+  "mock webserver clock preview uses fixed 09:00 time"
+);
+assert(
+  hooks.buttonTypePreviewForMockNow("clock", { type: "clock" }, { clockFormat: "12h" }).iconHtml.includes("9:00"),
+  "mock webserver clock preview uses fixed 9:00 time in 12h mode"
+);
 const backOnlySubpage = hooks.parseSubpageConfig(",,,,B");
 hooks.buildSubpageGrid(backOnlySubpage);
 assert.deepStrictEqual(plain(backOnlySubpage.buttons), []);
@@ -1065,6 +1404,7 @@ assert.strictEqual(hooks.displayFirmwareVersion("v1.11.1"), "v1.11.1");
 assert.strictEqual(hooks.displayFirmwareVersion("dev"), "Dev build");
 assert.strictEqual(hooks.displayFirmwareVersion("0.0.0"), "Dev build");
 assert.strictEqual(hooks.displayFirmwareVersion("main"), "Dev build");
+assert.strictEqual(hooks.displayFirmwareVersion("dev-jc8012p4a1-20260611-livecheck"), "Dev build");
 assert.strictEqual(hooks.displayFirmwareVersion(""), "Version unknown");
 assert.strictEqual(hooks.firmwareVersionFromMetadata({ firmware_version: "v1.12.0" }), "v1.12.0");
 assert.strictEqual(hooks.firmwareVersionFromMetadata({ project_version: "v1.12.1" }), "v1.12.1");

@@ -5,19 +5,11 @@
 # =============================================================================
 
 substitutions:
-  name: "guition-esp32-s3-4848s040-dev"
-  friendly_name: "Guition ESP32-S3-4848S040 Dev"
-  espcontrol_component_url: "https://github.com/jtenniswood/espcontrol"
-  espcontrol_component_ref: "main"
-
-# Local development: uncomment to build the espcontrol components from this
-# checkout instead of pulling them from GitHub.
-# external_components:
-#   - source:
-#       type: local
-#       path: ../../components
-#     components: [espcontrol, web_server_idf]
-#     refresh: 1s
+  name: "espcontrol-4inch-s3"
+  friendly_name: "EspControl 4inch S3"
+  espcontrol_component_url: "../.."
+  mdi_font_file: "../../common/assets/fonts/materialdesignicons-webfont-7.4.47.ttf"
+  espcontrol_component_ref: "HEAD"
 
 wifi:
   ssid: !secret wifi_ssid
@@ -26,8 +18,6 @@ wifi:
 packages:
   espcontrol: !include packages.yaml
 
-# Local web UI development: build the bundles (python3 scripts/build.py www),
-# serve docs/public/webserver/<device-slug>/ over HTTP, and point the device at
-# it by uncommenting below (replace with your computer's LAN IP).
-# web_server:
-#   js_url: "http://<computer-ip>:8080/www.js"
+web_server:
+  js_url: ""
+  js_include: "../../docs/public/webserver/guition-esp32-s3-4848s040/www.js"

@@ -41,19 +41,13 @@ registerButtonType("presence", {
   label: function () { return cardContractCardLabel("presence"); },
   allowInSubpage: function () { return cardContractAllowInSubpage("presence"); },
   pickerKey: function () { return cardContractPickerKey("presence"); },
-  experimental: function () { return cardContractExperimental("presence"); },
   hidden: function () { return cardContractHidden("presence"); },
   hideLabel: true,
   defaultConfig: function () { return cardContractDefaultConfig("presence"); },
   cardMetadata: PRESENCE_CARD_METADATA,
   onSelect: function (b) {
-    b.entity = "";
-    b.sensor = "";
-    b.unit = "";
-    b.precision = "";
-    b.icon = "Motion Sensor Off";
-    b.icon_on = "Motion Sensor";
-    b.options = setConfigOption("", SENSOR_ACTIVE_COLOR_OPTION, true);
+    var defaults = cardContractDefaultConfig("presence");
+    Object.keys(defaults).forEach(function (key) { b[key] = defaults[key]; });
   },
   renderSettings: function (panel, b, slot, helpers) {
     b.entity = "";
