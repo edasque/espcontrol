@@ -371,14 +371,25 @@ function normalizeHaCalendarModalLayout(value) {
   return values.indexOf(value) >= 0 ? value : "";
 }
 
+function normalizeHaCalendarUrgentMinutes(value) {
+  var parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) parsed = 5;
+  return [1, 2, 3, 5, 10].indexOf(parsed) >= 0 ? parsed : 5;
+}
+
 function normalizeHaCalendarOptions(options) {
   var mode = normalizeHaCalendarDisplayMode(
     configOptionValue(options, HA_CALENDAR_DISPLAY_MODE_OPTION));
   var layout = normalizeHaCalendarModalLayout(
     configOptionValue(options, HA_CALENDAR_MODAL_LAYOUT_OPTION));
+  var urgentMinutes = normalizeHaCalendarUrgentMinutes(
+    configOptionValue(options, HA_CALENDAR_URGENT_MINUTES_OPTION));
   var out = "";
   if (mode) out = setConfigOptionValue(out, HA_CALENDAR_DISPLAY_MODE_OPTION, mode);
   if (layout) out = setConfigOptionValue(out, HA_CALENDAR_MODAL_LAYOUT_OPTION, layout);
+  if (urgentMinutes !== 5) {
+    out = setConfigOptionValue(out, HA_CALENDAR_URGENT_MINUTES_OPTION, String(urgentMinutes));
+  }
   return out;
 }
 
@@ -406,6 +417,20 @@ function setHaCalendarModalLayout(b, layout) {
   var normalized = normalizeHaCalendarModalLayout(layout);
   b.options = setConfigOptionValue(b.options || "", HA_CALENDAR_MODAL_LAYOUT_OPTION,
     normalized || "");
+  b.options = normalizeHaCalendarOptions(b.options);
+  return b.options;
+}
+
+function haCalendarUrgentMinutes(b) {
+  return normalizeHaCalendarUrgentMinutes(
+    configOptionValue(b && b.options, HA_CALENDAR_URGENT_MINUTES_OPTION));
+}
+
+function setHaCalendarUrgentMinutes(b, minutes) {
+  if (!b) return "";
+  var normalized = normalizeHaCalendarUrgentMinutes(minutes);
+  b.options = setConfigOptionValue(b.options || "", HA_CALENDAR_URGENT_MINUTES_OPTION,
+    String(normalized));
   b.options = normalizeHaCalendarOptions(b.options);
   return b.options;
 }

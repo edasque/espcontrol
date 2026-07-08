@@ -18,12 +18,14 @@ shows the clock and date.
 ## Setting Up a Calendar Card
 
 1. Select a card and change its type to **Calendar**.
-2. In **Calendar Entities**, enter one or more `calendar.*` entities
+2. In **Entity**, enter one or more `calendar.*` entities
    (comma-separated for multiple — events from all of them are merged).
 3. Choose a **Display Mode**: **Next** or **Current** (see below).
 4. Choose a **Modal Layout** for the tap-to-open view: **Compact** or **Time Column**.
-5. Optionally set a **Label** (defaults to "Calendar").
-6. Apply the configuration so the panel restarts with the new card.
+5. Optionally change **Minutes before event** (defaults to 5) — how close an
+   event needs to be before it's treated as imminent (see below).
+6. Optionally set a **Label** (defaults to "Calendar").
+7. Apply the configuration so the panel restarts with the new card.
 
 ## Display Modes
 
@@ -31,8 +33,9 @@ shows the clock and date.
 start of the next upcoming event (showing `min`, `hr`, or `days`), even while you
 are currently in another meeting.
 
-- More than 5 minutes away: muted tile, white countdown + event name.
-- 5 minutes or less away: the whole tile turns your **primary colour** to get
+- More than **Minutes before event** away (default 5): muted tile, white
+  countdown + event name.
+- Within that window: the whole tile turns your **primary colour** to get
   your attention.
 - Nothing upcoming but a meeting is on now: shows **Now**.
 - Nothing left today: shows a relaxed glyph and **Done for the day**.
@@ -43,14 +46,16 @@ split at how much is left — and shows the phase:
 
 - **Just started** (first 5 minutes)
 - **In progress**
-- **About to end** (last 5 minutes — shows the minutes remaining)
+- **About to end** (within **Minutes before event** of finishing — shows the
+  minutes remaining)
 - **Free** when no meeting is active.
 
 ## The Agenda (tap to open)
 
 Tapping the tile opens today's remaining events, merged from every configured
-calendar and sorted by start time. Active events are highlighted, and the
-countdowns tick on their own while the view is open. Two layouts:
+calendar and sorted by start time. Active and imminent events (within
+**Minutes before event**) are highlighted, and the countdowns tick on their own
+while the view is open. Two layouts:
 
 - **Compact** — event name on top, with the time range and countdown beneath it.
 - **Time Column** — start/end times in a left column with an accent bar, and the

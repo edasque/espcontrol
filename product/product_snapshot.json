@@ -2816,6 +2816,19 @@
               "column"
             ],
             "defaultValue": ""
+          },
+          {
+            "name": "urgent_minutes",
+            "label": "Minutes before event",
+            "kind": "choice",
+            "values": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "10"
+            ],
+            "defaultValue": "5"
           }
         ],
         "default": {

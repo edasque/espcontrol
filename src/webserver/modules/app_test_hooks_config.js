@@ -179,6 +179,16 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     climatePrecisionValues: climatePrecisionValues,
     parseClimatePrecisionConfig: parseClimatePrecisionConfig,
     normalizeClimatePrecisionConfig: normalizeClimatePrecisionConfig,
+    normalizeHaCalendarDisplayMode: normalizeHaCalendarDisplayMode,
+    normalizeHaCalendarModalLayout: normalizeHaCalendarModalLayout,
+    normalizeHaCalendarUrgentMinutes: normalizeHaCalendarUrgentMinutes,
+    normalizeHaCalendarOptions: normalizeHaCalendarOptions,
+    haCalendarDisplayMode: haCalendarDisplayMode,
+    setHaCalendarDisplayMode: setHaCalendarDisplayMode,
+    haCalendarModalLayout: haCalendarModalLayout,
+    setHaCalendarModalLayout: setHaCalendarModalLayout,
+    haCalendarUrgentMinutes: haCalendarUrgentMinutes,
+    setHaCalendarUrgentMinutes: setHaCalendarUrgentMinutes,
     alarmCardTypeOptionValues: function (isSub) {
       return alarmCardTypeOptionsForSettings(!!isSub).map(function (option) {
         return option.value;

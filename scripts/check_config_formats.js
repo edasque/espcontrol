@@ -532,6 +532,47 @@ assert.strictEqual(
   "",
   "media volume max option is removed outside volume mode"
 );
+assert.strictEqual(
+  hooks.normalizeHaCalendarUrgentMinutes("10"),
+  10,
+  "calendar minutes-before-event keeps a supported value"
+);
+assert.strictEqual(
+  hooks.normalizeHaCalendarUrgentMinutes("7"),
+  5,
+  "calendar minutes-before-event normalizes an unsupported value to the default"
+);
+assert.strictEqual(
+  hooks.normalizeHaCalendarUrgentMinutes(""),
+  5,
+  "calendar minutes-before-event defaults to 5 when unset"
+);
+assert.strictEqual(
+  hooks.normalizeHaCalendarOptions("urgent_minutes=10"),
+  "urgent_minutes=10",
+  "calendar minutes-before-event keeps a non-default value in options"
+);
+assert.strictEqual(
+  hooks.normalizeHaCalendarOptions("urgent_minutes=5"),
+  "",
+  "calendar minutes-before-event omits the default value from options"
+);
+const calendarMinutesButton = {
+  entity: "calendar.office",
+  label: "Office",
+  icon: "Auto",
+  icon_on: "Auto",
+  sensor: "",
+  unit: "",
+  type: "ha_calendar",
+  precision: "",
+  options: "",
+};
+hooks.setHaCalendarUrgentMinutes(calendarMinutesButton, 3);
+assert.strictEqual(calendarMinutesButton.options, "urgent_minutes=3", "calendar minutes-before-event saves a selected value");
+assert.strictEqual(hooks.haCalendarUrgentMinutes(calendarMinutesButton), 3, "calendar minutes-before-event reads the selected value");
+hooks.setHaCalendarUrgentMinutes(calendarMinutesButton, 5);
+assert.strictEqual(calendarMinutesButton.options, "", "calendar minutes-before-event clears options when set back to the default");
 assert.strictEqual(hooks.alarmControlPanelValue(), "control_panel", "alarm combined-control value is spec-backed");
 assert.deepStrictEqual(Array.from(hooks.alarmActionValues()), ["away", "home", "disarm"], "alarm default actions are spec-backed");
 assert.strictEqual(hooks.normalizeAlarmIconDisplayMode("static"), "static", "alarm static icon mode is spec-backed");

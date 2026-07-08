@@ -1,6 +1,6 @@
 var HA_CALENDAR_CARD_METADATA = {
   entity: {
-    label: "Calendar Entities",
+    label: "Entity",
     idSuffix: "entity",
     placeholder: "e.g. calendar.my_cal (comma-separated for multiple)",
     domains: function () { return cardContractDomains("ha_calendar"); },
@@ -26,6 +26,14 @@ var HA_CALENDAR_CARD_METADATA = {
     badge: "calendar-clock",
   },
 };
+
+var HA_CALENDAR_MINUTE_OPTIONS = [
+  ["1", "1m"],
+  ["2", "2m"],
+  ["3", "3m"],
+  ["5", "5m"],
+  ["10", "10m"],
+];
 
 registerButtonType("ha_calendar", {
   label: function () { return cardContractCardLabel("ha_calendar"); },
@@ -86,6 +94,18 @@ registerButtonType("ha_calendar", {
         },
       }),
     });
+
+    var urgentMinutes = helpers.selectField(
+      "Minutes before event",
+      helpers.idPrefix + "ha-calendar-urgent-minutes",
+      HA_CALENDAR_MINUTE_OPTIONS,
+      String(haCalendarUrgentMinutes(b)),
+      function () {
+        setHaCalendarUrgentMinutes(b, this.value);
+        helpers.saveField("options", b.options);
+      }
+    );
+    panel.appendChild(urgentMinutes.field);
 
     helpers.renderCardTextField(panel, b, helpers, {
       label: "Label (optional)",

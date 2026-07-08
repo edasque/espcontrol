@@ -11,6 +11,8 @@ constexpr size_t   HA_CALENDAR_TIME_DISPLAY_MAX_LEN = 8;  // "H:MM\0"
 constexpr size_t   HA_CALENDAR_RESPONSE_MAX_LEN = 2048;
 constexpr uint32_t HA_CALENDAR_REQUEST_TIMEOUT_MS = 15000;
 constexpr int      HA_CALENDAR_URGENT_SECS = 300;  // 5 minutes
+constexpr size_t   HA_CALENDAR_MODAL_INTERNAL_FREE_MIN_BYTES = HA_ACTION_INTERNAL_FREE_MIN_BYTES;
+constexpr size_t   HA_CALENDAR_MODAL_INTERNAL_LARGEST_MIN_BYTES = HA_ACTION_INTERNAL_LARGEST_MIN_BYTES;
 constexpr size_t   HA_CALENDAR_TITLE_SMALL_LEN = 18;  // titles longer than this use the smaller font
 // Spacing for the dual "1h 51m" countdown: negative pulls each tiny unit tight
 // against its number; the group gap is the breathing room between "1h" and "51m".
@@ -64,6 +66,7 @@ struct HaCalendarCardCtx {
   uint32_t accent_color = DEFAULT_SLIDER_COLOR;
   uint32_t off_color = DEFAULT_OFF_COLOR;
   int width_compensation_percent = 100;
+  int urgent_secs = HA_CALENDAR_URGENT_SECS;  // configurable "imminent" threshold
   bool available = false;
   lv_timer_t *refresh_timer = nullptr;  // periodic re-render so countdown ticks
 
@@ -108,6 +111,24 @@ inline HaCalendarModalUi &ha_calendar_modal_ui() {
 
 inline bool ha_calendar_ctx_valid(HaCalendarCardCtx *ctx) {
   return ctx != nullptr && ctx->magic == HA_CALENDAR_CTX_MAGIC;
+}
+
+inline bool ha_calendar_modal_heap_available(const char *stage) {
+  return ha_internal_heap_available(
+    stage ? stage : "calendar modal",
+    HA_CALENDAR_MODAL_INTERNAL_FREE_MIN_BYTES,
+    HA_CALENDAR_MODAL_INTERNAL_LARGEST_MIN_BYTES);
+}
+
+// Clamp the configurable "how many minutes before an event counts as
+// imminent" setting to the supported choice list, defaulting to the
+// previous hardcoded 5 minutes when unset or invalid.
+inline int ha_calendar_normalize_urgent_minutes(const std::string &value) {
+  char *end = nullptr;
+  long parsed = std::strtol(value.c_str(), &end, 10);
+  if (end == value.c_str()) return 5;
+  if (parsed != 1 && parsed != 2 && parsed != 3 && parsed != 5 && parsed != 10) return 5;
+  return static_cast<int>(parsed);
 }
 
 inline bool ha_calendar_ctx_current(HaCalendarCardCtx *ctx, uint32_t generation) {
@@ -385,7 +406,7 @@ inline void ha_calendar_apply_card_face(HaCalendarCardCtx *ctx) {
     lv_obj_set_style_bg_grad_stop(ctx->btn, stop, sel);
 
     ha_calendar_set_title(ctx, best->title.c_str());
-    if (secs_remaining <= HA_CALENDAR_URGENT_SECS) {
+    if (secs_remaining <= ctx->urgent_secs) {
       // About to end: show the minutes-left number.
       char num_buf[16] = {}, unit_buf[8] = {};
       ha_calendar_format_countdown(secs_remaining, num_buf, sizeof(num_buf),
@@ -416,11 +437,12 @@ inline void ha_calendar_apply_card_face(HaCalendarCardCtx *ctx) {
   // count down to the next event even while another one is currently active
   // (the HA entity state alone only exposes the active event in that case).
   // Show a countdown (number + unit) to `title`, escalating to a loud accent
-  // card with dark text when the event is imminent (≤ 5 min away).
+  // card with dark text when the event is imminent (within ctx->urgent_secs,
+  // configurable via the "Minutes before event" setting; defaults to 5 min).
   auto show_countdown = [&](int64_t secs_until, const char *title) {
     ha_calendar_set_countdown_labels(ctx, secs_until);
     ha_calendar_set_title(ctx, title);
-    if (secs_until <= HA_CALENDAR_URGENT_SECS) {
+    if (secs_until <= ctx->urgent_secs) {
       uint32_t on_accent = 0x1A1A1A;  // dark text for contrast on the accent fill
       lv_obj_set_style_text_color(ctx->value_lbl, lv_color_hex(on_accent), LV_PART_MAIN);
       if (ctx->unit_lbl) lv_obj_set_style_text_color(ctx->unit_lbl, lv_color_hex(on_accent), LV_PART_MAIN);
@@ -530,6 +552,8 @@ inline HaCalendarCardCtx *create_ha_calendar_card_context(
   ctx->configured_label = p.label;
   ctx->display_mode = cfg_option_value(p.options, "display_mode");
   ctx->modal_layout = cfg_option_value(p.options, "modal_layout");
+  ctx->urgent_secs = ha_calendar_normalize_urgent_minutes(
+    cfg_option_value(p.options, "urgent_minutes")) * 60;
   ESP_LOGD("ha_calendar", "setup entities='%s' options='%s' -> display_mode='%s' modal_layout='%s'",
            p.entity.c_str(), p.options.c_str(), ctx->display_mode.c_str(), ctx->modal_layout.c_str());
   ctx->accent_color = accent_color;
@@ -824,12 +848,17 @@ inline void ha_calendar_render_compact(HaCalendarCardCtx *ctx, lv_coord_t conten
     HaCalendarEventRow &ev = ui.events[i];
     bool is_active = ev.start_epoch <= now && ev.end_epoch > now;
     bool is_urgent = !is_active && ev.start_epoch > now &&
-                     (ev.start_epoch - now) <= HA_CALENDAR_URGENT_SECS;
+                     (ev.start_epoch - now) <= ctx->urgent_secs;
 
     uint32_t title_col = is_active || is_urgent ? ctx->accent_color : DARK_TEXT_PRIMARY;
     uint32_t time_col  = is_active ? ctx->accent_color : DARK_TEXT_MUTED;
 
     lv_obj_t *row = lv_obj_create(ui.list);
+    if (!row) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal row");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_obj_set_width(row, lv_pct(100));
     lv_obj_set_height(row, LV_SIZE_CONTENT);
     lv_obj_set_style_radius(row, 0, LV_PART_MAIN);
@@ -865,6 +894,11 @@ inline void ha_calendar_render_compact(HaCalendarCardCtx *ctx, lv_coord_t conten
     // Line 1: meeting name on its own, full width (so it isn't squeezed by the
     // countdown and the scrollbar can't sit on top of the countdown).
     lv_obj_t *title_lbl = lv_label_create(row);
+    if (!title_lbl) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal title");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(title_lbl, ev.title[0] ? ev.title : espcontrol_i18n("(untitled)"));
     lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
     lv_obj_set_width(title_lbl, lv_pct(100));
@@ -874,6 +908,11 @@ inline void ha_calendar_render_compact(HaCalendarCardCtx *ctx, lv_coord_t conten
 
     // Line 2: time range (left) + countdown (right), on the same baseline.
     lv_obj_t *bottom = lv_obj_create(row);
+    if (!bottom) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal metadata row");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_obj_set_size(bottom, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(bottom, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(bottom, 0, LV_PART_MAIN);
@@ -889,24 +928,36 @@ inline void ha_calendar_render_compact(HaCalendarCardCtx *ctx, lv_coord_t conten
     std::snprintf(time_range, sizeof(time_range), "%s \xe2\x80\x93 %s",
       ev.start_display, ev.end_display);
     lv_obj_t *time_lbl = lv_label_create(bottom);
+    if (!time_lbl) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal time label");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(time_lbl, time_range);
     lv_obj_set_style_text_color(time_lbl, lv_color_hex(time_col), LV_PART_MAIN);
     if (tiny_f) lv_obj_set_style_text_font(time_lbl, tiny_f, LV_PART_MAIN);
 
     lv_obj_t *cd_lbl = lv_label_create(bottom);
+    if (!cd_lbl) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal countdown label");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(cd_lbl, cd);
     lv_obj_set_style_text_color(cd_lbl, lv_color_hex(title_col), LV_PART_MAIN);
     if (tiny_f) lv_obj_set_style_text_font(cd_lbl, tiny_f, LV_PART_MAIN);
     lv_obj_set_style_margin_right(cd_lbl, 5, LV_PART_MAIN);  // nudge countdown left
 
-    // Divider
+    // Divider (best-effort; a missing divider is cosmetic, not worth aborting).
     if (i + 1 < ui.event_count) {
       lv_obj_t *div = lv_obj_create(ui.list);
-      lv_obj_set_size(div, lv_pct(90), 1);
-      lv_obj_set_style_bg_color(div, lv_color_hex(DARK_BORDER), LV_PART_MAIN);
-      lv_obj_set_style_bg_opa(div, LV_OPA_COVER, LV_PART_MAIN);
-      lv_obj_set_style_border_width(div, 0, LV_PART_MAIN);
-      lv_obj_set_style_shadow_width(div, 0, LV_PART_MAIN);
+      if (div) {
+        lv_obj_set_size(div, lv_pct(90), 1);
+        lv_obj_set_style_bg_color(div, lv_color_hex(DARK_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(div, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_width(div, 0, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(div, 0, LV_PART_MAIN);
+      }
     }
   }
 
@@ -924,13 +975,18 @@ inline void ha_calendar_render_column(HaCalendarCardCtx *ctx, lv_coord_t content
     HaCalendarEventRow &ev = ui.events[i];
     bool is_active = ev.start_epoch <= now && ev.end_epoch > now;
     bool is_urgent = !is_active && ev.start_epoch > now &&
-                     (ev.start_epoch - now) <= HA_CALENDAR_URGENT_SECS;
+                     (ev.start_epoch - now) <= ctx->urgent_secs;
 
     uint32_t accent = (is_active || is_urgent) ? ctx->accent_color : DARK_BORDER;
     uint32_t title_col = (is_active || is_urgent) ? ctx->accent_color : DARK_TEXT_PRIMARY;
     uint32_t time_col  = is_active ? ctx->accent_color : DARK_TEXT_MUTED;
 
     lv_obj_t *row = lv_obj_create(ui.list);
+    if (!row) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal row");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_style_radius(row, 0, LV_PART_MAIN);
     lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
@@ -950,6 +1006,11 @@ inline void ha_calendar_render_column(HaCalendarCardCtx *ctx, lv_coord_t content
 
     // Time column (start + end stacked)
     lv_obj_t *tcol = lv_obj_create(row);
+    if (!tcol) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal time column");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_obj_set_size(tcol, 48, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(tcol, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(tcol, 0, LV_PART_MAIN);
@@ -963,11 +1024,21 @@ inline void ha_calendar_render_column(HaCalendarCardCtx *ctx, lv_coord_t content
     const lv_font_t *tiny_f = ctx->tiny_font ? ctx->tiny_font : small_f;
     // Start time: prominent (white, or accent when active). End time: smaller, muted.
     lv_obj_t *sl = lv_label_create(tcol);
+    if (!sl) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal start-time label");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(sl, ev.start_display);
     lv_obj_set_style_text_color(sl, lv_color_hex(is_active ? ctx->accent_color : DARK_TEXT_PRIMARY), LV_PART_MAIN);
     if (small_f) lv_obj_set_style_text_font(sl, small_f, LV_PART_MAIN);
 
     lv_obj_t *el = lv_label_create(tcol);
+    if (!el) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal end-time label");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(el, ev.end_display);
     lv_obj_set_style_text_color(el, lv_color_hex(DARK_TEXT_MUTED), LV_PART_MAIN);
     if (tiny_f) lv_obj_set_style_text_font(el, tiny_f, LV_PART_MAIN);
@@ -977,16 +1048,24 @@ inline void ha_calendar_render_column(HaCalendarCardCtx *ctx, lv_coord_t content
     if (small_f && small_f->line_height > 0) bar_h += small_f->line_height;
     if (tiny_f && tiny_f->line_height > 0) bar_h += tiny_f->line_height;
     if (bar_h <= 0) bar_h = 34;
+    // Accent bar is decorative; a missing one is cosmetic, not worth aborting.
     lv_obj_t *bar = lv_obj_create(row);
-    lv_obj_set_size(bar, 3, bar_h);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(accent), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(bar, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(bar, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_hor(bar, 6, LV_PART_MAIN);
+    if (bar) {
+      lv_obj_set_size(bar, 3, bar_h);
+      lv_obj_set_style_bg_color(bar, lv_color_hex(accent), LV_PART_MAIN);
+      lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_MAIN);
+      lv_obj_set_style_border_width(bar, 0, LV_PART_MAIN);
+      lv_obj_set_style_shadow_width(bar, 0, LV_PART_MAIN);
+      lv_obj_set_style_margin_hor(bar, 6, LV_PART_MAIN);
+    }
 
     // Info column: title + countdown
     lv_obj_t *info = lv_obj_create(row);
+    if (!info) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal info column");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_obj_set_flex_grow(info, 1);
     lv_obj_set_height(info, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(info, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -998,6 +1077,11 @@ inline void ha_calendar_render_column(HaCalendarCardCtx *ctx, lv_coord_t content
     lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
 
     lv_obj_t *title_lbl = lv_label_create(info);
+    if (!title_lbl) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal title");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(title_lbl, ev.title[0] ? ev.title : espcontrol_i18n("(untitled)"));
     lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
     lv_obj_set_width(title_lbl, lv_pct(100));
@@ -1015,17 +1099,25 @@ inline void ha_calendar_render_column(HaCalendarCardCtx *ctx, lv_coord_t content
       std::snprintf(cd, sizeof(cd), "%s %s", espcontrol_i18n("In"), cdbuf);
     }
     lv_obj_t *cd_lbl = lv_label_create(info);
+    if (!cd_lbl) {
+      ESP_LOGW("ha_calendar", "Unable to create calendar modal countdown label");
+      ha_calendar_modal_set_status("Not enough memory");
+      return;
+    }
     lv_label_set_text(cd_lbl, cd);
     lv_obj_set_style_text_color(cd_lbl, lv_color_hex(title_col), LV_PART_MAIN);
     if (tiny_f) lv_obj_set_style_text_font(cd_lbl, tiny_f, LV_PART_MAIN);
 
+    // Divider (best-effort; a missing divider is cosmetic, not worth aborting).
     if (i + 1 < ui.event_count) {
       lv_obj_t *div = lv_obj_create(ui.list);
-      lv_obj_set_size(div, lv_pct(90), 1);
-      lv_obj_set_style_bg_color(div, lv_color_hex(DARK_BORDER), LV_PART_MAIN);
-      lv_obj_set_style_bg_opa(div, LV_OPA_COVER, LV_PART_MAIN);
-      lv_obj_set_style_border_width(div, 0, LV_PART_MAIN);
-      lv_obj_set_style_shadow_width(div, 0, LV_PART_MAIN);
+      if (div) {
+        lv_obj_set_size(div, lv_pct(90), 1);
+        lv_obj_set_style_bg_color(div, lv_color_hex(DARK_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(div, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_width(div, 0, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(div, 0, LV_PART_MAIN);
+      }
     }
   }
 
@@ -1320,11 +1412,13 @@ inline void ha_calendar_modal_refresh_cb(lv_timer_t *) {
 
 inline void ha_calendar_open_modal(HaCalendarCardCtx *ctx) {
   if (!ha_calendar_ctx_valid(ctx) || ctx->entities.empty()) return;
+  if (!ha_calendar_modal_heap_available("calendar modal open")) return;
 
   ControlModalShell shell = control_modal_open_shell(
     ControlModalKind::HA_CALENDAR, ctx->btn, ctx->width_compensation_percent,
     ctx->chrome_icon_font ? ctx->chrome_icon_font : ctx->icon_font,
     "\U000F0141", false, ha_calendar_modal_hide);
+  if (!shell.overlay || !shell.panel) return;
 
   HaCalendarModalUi &ui = ha_calendar_modal_ui();
   ui.active = ctx;
@@ -1363,6 +1457,11 @@ inline void ha_calendar_open_modal(HaCalendarCardCtx *ctx) {
   lv_coord_t row_gap = control_modal_scaled_px(6, layout.short_side);
   if (row_gap < 4) row_gap = 4;
   ui.list = control_modal_create_scroll_list(ui.panel, list_w, list_h, row_gap);
+  if (!ui.list) {
+    ESP_LOGW("ha_calendar", "Unable to create calendar modal list");
+    ha_calendar_modal_hide();
+    return;
+  }
   // Right gutter so the scrollbar sits beside the rows instead of over the
   // right-most content (countdowns).
   lv_coord_t sb_gutter = control_modal_scaled_px(10, layout.short_side);

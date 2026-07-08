@@ -50,4 +50,4 @@ This generated reference lists stable setup facts from the shared card contract.
 | Weather | weather | weather | Yes | Own picker item | Type: default, today, tomorrow; Large Temperature Numbers | Visible |
 | Camera Card | image | camera, image | Yes | Own picker item | Show Label; Show Icon; Expanded Image: fill, fit | Visible |
 | Weather Forecast | weather_forecast | weather | Yes | Own picker item | None | Hidden |
-| Calendar | ha_calendar | calendar | Yes | Own picker item | Display Mode: default, current; Modal Layout: default, column | Visible |
+| Calendar | ha_calendar | calendar | Yes | Own picker item | Display Mode: default, current; Modal Layout: default, column; Minutes before event: 1, 2, 3, 5, 10 | Visible |

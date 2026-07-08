@@ -1689,6 +1689,19 @@ var CARD_CONTRACT_CARDS = {
           "column"
         ],
         "defaultValue": ""
+      },
+      {
+        "name": "urgent_minutes",
+        "label": "Minutes before event",
+        "kind": "choice",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "5",
+          "10"
+        ],
+        "defaultValue": "5"
       }
     ],
     "default": {
@@ -1900,6 +1913,7 @@ var CARD_CONTRACT_OPTION_NAMES = {
   "subpage_kind": "subpage_kind",
   "temperature_step": "temperature_step",
   "to_grid": "to_grid",
+  "urgent_minutes": "urgent_minutes",
   "vacuum_mode": "vacuum_mode",
   "volume_max": "volume_max",
   "weather_mode": "weather_mode",

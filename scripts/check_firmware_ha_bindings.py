@@ -1218,6 +1218,11 @@ def firmware_calendar_request_errors(firmware_dir: Path, root: Path) -> list[str
         or "ha_calendar_ctx_current(ctx, generation)" not in text
     ):
         errors.append(f"{rel}: ignore stale calendar callbacks after grid rebuild")
+    if (
+        "HA_CALENDAR_MODAL_INTERNAL_FREE_MIN_BYTES = HA_ACTION_INTERNAL_FREE_MIN_BYTES" not in text
+        or "HA_CALENDAR_MODAL_INTERNAL_LARGEST_MIN_BYTES = HA_ACTION_INTERNAL_LARGEST_MIN_BYTES" not in text
+    ):
+        errors.append(f"{rel}: keep calendar modal heap guard aligned with shared HA action threshold")
     return errors
 
 
@@ -4251,6 +4256,8 @@ def run_self_test() -> int:
     )
     expect_calendar_request_errors(
         "calendar request uses local-day range and guarded callbacks",
+        "constexpr size_t HA_CALENDAR_MODAL_INTERNAL_FREE_MIN_BYTES = HA_ACTION_INTERNAL_FREE_MIN_BYTES;\n"
+        "constexpr size_t HA_CALENDAR_MODAL_INTERNAL_LARGEST_MIN_BYTES = HA_ACTION_INTERNAL_LARGEST_MIN_BYTES;\n"
         "inline bool ha_calendar_ctx_current(HaCalendarCardCtx *ctx, uint32_t generation) {\n"
         "  return generation == ha_subscription_generation() && lv_obj_get_user_data(ctx->btn) == ctx;\n"
         "}\n"
@@ -4263,6 +4270,21 @@ def run_self_test() -> int:
         "  ha_calendar_ctx_current(ctx, generation);\n"
         "}\n",
         (),
+    )
+    expect_calendar_request_errors(
+        "calendar modal heap guard must alias the shared HA action threshold",
+        "inline bool ha_calendar_ctx_current(HaCalendarCardCtx *ctx, uint32_t generation) {\n"
+        "  return generation == ha_subscription_generation() && lv_obj_get_user_data(ctx->btn) == ctx;\n"
+        "}\n"
+        "inline void ha_calendar_request_events_for_entity() {\n"
+        "  const uint32_t generation = ha_subscription_generation();\n"
+        "  std::string start_dt = ha_calendar_local_datetime_str(ha_calendar_today_midnight_epoch());\n"
+        "  std::string end_dt = ha_calendar_local_datetime_str(ha_calendar_tomorrow_midnight_epoch());\n"
+        "  ha_action_add_data(req, \"start_date_time\", start_dt.c_str());\n"
+        "  ha_action_add_data(req, \"end_date_time\", end_dt.c_str());\n"
+        "  ha_calendar_ctx_current(ctx, generation);\n"
+        "}\n",
+        ("keep calendar modal heap guard aligned with shared HA action threshold",),
     )
     expect_artwork_image_auth_errors(
         "local artwork image request uses Basic auth",

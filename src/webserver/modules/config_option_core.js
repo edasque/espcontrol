@@ -36,6 +36,7 @@ var CLIMATE_NUMBER_DISPLAY_OPTION = cardContractOptionName("number_display");
 var CLIMATE_TEMPERATURE_STEP_OPTION = cardContractOptionName("temperature_step");
 var HA_CALENDAR_DISPLAY_MODE_OPTION = cardContractOptionName("display_mode");
 var HA_CALENDAR_MODAL_LAYOUT_OPTION = cardContractOptionName("modal_layout");
+var HA_CALENDAR_URGENT_MINUTES_OPTION = cardContractOptionName("urgent_minutes");
 var MEDIA_VOLUME_MAX_OPTION = cardContractOptionName("volume_max");
 var MEDIA_LABEL_DISPLAY_OPTION = cardContractOptionName("label_display");
 var MEDIA_NUMBER_DISPLAY_OPTION = cardContractOptionName("number_display");
