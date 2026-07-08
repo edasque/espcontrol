@@ -226,6 +226,18 @@ inline void solar_apply_card_face(SolarCardCtx *ctx) {
     if (ctx->label_font) lv_obj_set_style_text_font(ctx->unit_lbl, ctx->label_font, LV_PART_MAIN);
     lv_label_set_text(ctx->unit_lbl, hero.has ? hero.unit.c_str() : "");
     lv_obj_set_style_text_color(ctx->unit_lbl, lv_color_hex(DARK_TEXT_PRIMARY), LV_PART_MAIN);
+    // Tuck the unit tight against the number (cancels the flex gap/font side
+    // bearing) and re-center the value+unit pair now that its combined width
+    // has changed, so longer readings like "13.1 kWh" stay clear of a 1x1
+    // tile's right edge instead of overflowing past it.
+    lv_obj_set_style_margin_left(ctx->unit_lbl, -4, LV_PART_MAIN);
+    if (ctx->value_lbl) {
+      lv_obj_t *sensor_container = lv_obj_get_parent(ctx->value_lbl);
+      if (sensor_container) {
+        lv_obj_update_layout(sensor_container);
+        lv_obj_align(sensor_container, LV_ALIGN_TOP_MID, 0, 0);
+      }
+    }
   }
 
   // Bottom label: hero type name
