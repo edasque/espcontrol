@@ -26,6 +26,9 @@ REQUIRED_LIGHT_CONTROL_ICON_GLYPHS = {
     r'"\U000F0425"': "mdi-power",
     r'"\U000F0766"': "mdi-circle-outline",
 }
+# font_icon_card is shared by the climate card, the Solar card's modal rows,
+# and (via the raw chevron-left codepoint checked separately below) the
+# Solar/Calendar modal back button.
 REQUIRED_CLIMATE_CARD_ICON_NAMES = {
     "Air Filter",
     "Fan",
@@ -37,6 +40,18 @@ REQUIRED_CLIMATE_CARD_ICON_NAMES = {
     "Thermostat",
     "Thermostat Auto",
     "Water",
+    "Transmission Tower",
+    "Solar Power",
+    "Home Lightning Bolt",
+    "Arrow Up",
+    "Arrow Down",
+    "Battery",
+}
+
+# Raw codepoint (not a named icons.json entry) used directly by modal chrome
+# for the back button; shared by the Solar and Calendar detail modals.
+REQUIRED_CLIMATE_CARD_ICON_CODEPOINTS = {
+    "F0141": "mdi-chevron-left (modal back button)",
 }
 
 
@@ -294,6 +309,10 @@ def test_climate_card_icon_glyphs() -> None:
         icon = icon_by_name[icon_name]
         glyph = rf'"\U{icon["codepoint"]:>08s}"'
         assert glyph in glyphs, f"climate card icon font missing {icon_name}"
+
+    for codepoint, label in sorted(REQUIRED_CLIMATE_CARD_ICON_CODEPOINTS.items()):
+        glyph = rf'"\U{codepoint:>08s}"'
+        assert glyph in glyphs, f"climate card icon font missing {label}"
 
     for font_path in sorted((ROOT / "devices").glob("*/device/fonts.yaml")):
         text = font_path.read_text(encoding="utf-8")
@@ -573,6 +592,7 @@ def main() -> int:
     test_web_screen_aspect_matches_public_resolution()
     test_web_grid_spacing_matches_across_screen_sizes()
     test_setup_icon_glyphs()
+    test_climate_card_icon_glyphs()
     test_weather_card_visual_matches_preview()
     test_weather_card_mode_visibility_reset()
     test_grid_phase2_uses_cleaned_spanned_layout()

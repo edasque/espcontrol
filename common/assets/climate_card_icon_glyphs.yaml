@@ -1,7 +1,13 @@
-# Climate option chip icons used by font_icon_card.
+# Climate option chip icons used by font_icon_card. Also used by the Solar
+# card's modal row icons and the back-button glyph shared by the Solar and
+# Calendar detail modals.
 # User-selectable climate card icons use font_icon_main.
+- "\U000F0141"  # mdi-chevron-left (Solar/Calendar modal back button)
 - "\U000F0D43"  # mdi-air-filter
 - "\U000F0150"  # mdi-clock-outline
+- "\U000F0045"  # mdi-arrow-down (Solar: From Grid)
+- "\U000F005D"  # mdi-arrow-up (Solar: To Grid)
+- "\U000F0079"  # mdi-battery (Solar: Battery)
 - "\U000F0210"  # mdi-fan
 - "\U000F171D"  # mdi-fan-auto
 - "\U000F081D"  # mdi-fan-off
@@ -24,3 +30,6 @@
 - "\U000F0393"  # mdi-thermostat
 - "\U000F1B17"  # mdi-thermostat-auto
 - "\U000F058C"  # mdi-water
+- "\U000F0D3E"  # mdi-transmission-tower (Solar: Net)
+- "\U000F0A72"  # mdi-solar-power (Solar: Production)
+- "\U000F1903"  # mdi-home-lightning-bolt (Solar: Consumption)
