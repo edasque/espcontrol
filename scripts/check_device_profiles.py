@@ -46,7 +46,6 @@ REQUIRED_CLIMATE_CARD_ICON_NAMES = {
     "Arrow Up",
     "Arrow Down",
     "Battery",
-    "View Headline",
 }
 
 # Raw codepoint (not a named icons.json entry) used directly by modal chrome
