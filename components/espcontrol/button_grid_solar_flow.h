@@ -168,12 +168,10 @@ inline lv_obj_t *solar_flow_make_dot(lv_obj_t *parent, int x, int y, uint32_t co
 
 // ── Layout initialization ─────────────────────────────────────────────────────
 
-inline void solar_flow_init_widgets(SolarCardCtx *ctx, bool layout_2x2,
-                                    const lv_font_t *font) {
-  lv_obj_t   *btn = ctx->btn;
-  lv_coord_t  W   = lv_obj_get_width(btn);
-  lv_coord_t  H   = lv_obj_get_height(btn);
-  SolarFlowWidgets *fw = ctx->flow_widgets;
+inline void solar_flow_build_widgets(lv_obj_t *parent, lv_coord_t W, lv_coord_t H,
+                                     SolarFlowWidgets *fw, bool layout_2x2,
+                                     SolarCardCtx *ctx) {
+  lv_obj_t *btn = parent;
 
   bool has_battery = !ctx->battery.entity_id.empty();
   bool has_grid    = !ctx->from_grid.entity_id.empty() || !ctx->to_grid.entity_id.empty();
@@ -299,49 +297,8 @@ inline void solar_flow_update_node(SolarFlowNode &n, const std::string &val,
 
 // ── Main flow card face update ────────────────────────────────────────────────
 
-inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
-  if (!ctx || !ctx->btn) return;
-
-  // Hide standard hero widgets
-  if (ctx->value_lbl)  lv_obj_add_flag(ctx->value_lbl,  LV_OBJ_FLAG_HIDDEN);
-  if (ctx->unit_lbl)   lv_obj_add_flag(ctx->unit_lbl,   LV_OBJ_FLAG_HIDDEN);
-  if (ctx->label_lbl)  lv_obj_add_flag(ctx->label_lbl,  LV_OBJ_FLAG_HIDDEN);
-  if (ctx->icon_lbl)   lv_obj_add_flag(ctx->icon_lbl,   LV_OBJ_FLAG_HIDDEN);
-  if (ctx->corner_lbl) lv_obj_add_flag(ctx->corner_lbl, LV_OBJ_FLAG_HIDDEN);
-
-  lv_coord_t W = lv_obj_get_width(ctx->btn);
-  lv_coord_t H = lv_obj_get_height(ctx->btn);
-  if (W < 20 || H < 20) return;
-
-  bool layout_2x2 = (W >= 180 && H >= 180);
-  bool has_battery = !ctx->battery.entity_id.empty();
-  bool has_grid    = !ctx->from_grid.entity_id.empty() || !ctx->to_grid.entity_id.empty();
-  bool want_2x2    = layout_2x2 && (has_battery || has_grid);
-
-  if (!ctx->flow_widgets) ctx->flow_widgets = new SolarFlowWidgets();
-  SolarFlowWidgets *fw = ctx->flow_widgets;
-
-  if (!fw->initialized || fw->layout_2x2 != want_2x2 || fw->had_battery != has_battery) {
-    // Delete only tracked flow widgets (never iterate btn children)
-    auto del_if = [](lv_obj_t *&o) { if (o) { lv_obj_del(o); o = nullptr; } };
-    auto del_node = [&](SolarFlowNode &n) {
-      del_if(n.arc); n.val_lbl = nullptr; n.sub_lbl = nullptr;
-      del_if(n.name_lbl);
-    };
-    del_node(fw->solar_node);   del_node(fw->home_node);
-    del_node(fw->battery_node); del_node(fw->grid_node);
-    del_if(fw->line_top);  del_if(fw->line_bot);
-    del_if(fw->line_left); del_if(fw->line_right);
-    del_if(fw->center);
-    *fw = SolarFlowWidgets{};
-    solar_flow_init_widgets(ctx, want_2x2, ctx->label_font);
-  }
-
-  // Background: solid off_color
-  lv_style_selector_t sel = static_cast<lv_style_selector_t>(LV_PART_MAIN) | LV_STATE_DEFAULT;
-  lv_obj_set_style_bg_color(ctx->btn, lv_color_hex(ctx->off_color), sel);
-  lv_obj_set_style_bg_grad_dir(ctx->btn, LV_GRAD_DIR_NONE, sel);
-
+inline void solar_flow_update_all_nodes(SolarFlowWidgets *fw, SolarCardCtx *ctx,
+                                        bool layout_2x2, bool has_battery, bool has_grid) {
   // Compute solar kW as the 100% baseline for arc fills
   double solar_kw = solar_flow_to_kw(ctx->production, false);
   auto arc_pct = [&](double kw) -> int {
@@ -359,7 +316,7 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
   solar_flow_update_node(fw->home_node,
     solar_flow_fmt(ctx->consumption, false), arc_pct(home_kw));
 
-  if (fw->layout_2x2) {
+  if (layout_2x2) {
     auto show = [](lv_obj_t *o, bool v) {
       if (!o) return;
       if (v) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
@@ -410,4 +367,50 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
     show(fw->grid_node.name_lbl, has_grid);
     show(fw->line_left, has_grid);
   }
+}
+
+inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
+  if (!ctx || !ctx->btn) return;
+
+  // Hide standard hero widgets
+  if (ctx->value_lbl)  lv_obj_add_flag(ctx->value_lbl,  LV_OBJ_FLAG_HIDDEN);
+  if (ctx->unit_lbl)   lv_obj_add_flag(ctx->unit_lbl,   LV_OBJ_FLAG_HIDDEN);
+  if (ctx->label_lbl)  lv_obj_add_flag(ctx->label_lbl,  LV_OBJ_FLAG_HIDDEN);
+  if (ctx->icon_lbl)   lv_obj_add_flag(ctx->icon_lbl,   LV_OBJ_FLAG_HIDDEN);
+  if (ctx->corner_lbl) lv_obj_add_flag(ctx->corner_lbl, LV_OBJ_FLAG_HIDDEN);
+
+  lv_coord_t W = lv_obj_get_width(ctx->btn);
+  lv_coord_t H = lv_obj_get_height(ctx->btn);
+  if (W < 20 || H < 20) return;
+
+  bool layout_2x2 = (W >= 180 && H >= 180);
+  bool has_battery = !ctx->battery.entity_id.empty();
+  bool has_grid    = !ctx->from_grid.entity_id.empty() || !ctx->to_grid.entity_id.empty();
+  bool want_2x2    = layout_2x2 && (has_battery || has_grid);
+
+  if (!ctx->flow_widgets) ctx->flow_widgets = new SolarFlowWidgets();
+  SolarFlowWidgets *fw = ctx->flow_widgets;
+
+  if (!fw->initialized || fw->layout_2x2 != want_2x2 || fw->had_battery != has_battery) {
+    // Delete only tracked flow widgets (never iterate btn children)
+    auto del_if = [](lv_obj_t *&o) { if (o) { lv_obj_del(o); o = nullptr; } };
+    auto del_node = [&](SolarFlowNode &n) {
+      del_if(n.arc); n.val_lbl = nullptr; n.sub_lbl = nullptr;
+      del_if(n.name_lbl);
+    };
+    del_node(fw->solar_node);   del_node(fw->home_node);
+    del_node(fw->battery_node); del_node(fw->grid_node);
+    del_if(fw->line_top);  del_if(fw->line_bot);
+    del_if(fw->line_left); del_if(fw->line_right);
+    del_if(fw->center);
+    *fw = SolarFlowWidgets{};
+    solar_flow_build_widgets(ctx->btn, W, H, fw, want_2x2, ctx);
+  }
+
+  // Background: solid off_color
+  lv_style_selector_t sel = static_cast<lv_style_selector_t>(LV_PART_MAIN) | LV_STATE_DEFAULT;
+  lv_obj_set_style_bg_color(ctx->btn, lv_color_hex(ctx->off_color), sel);
+  lv_obj_set_style_bg_grad_dir(ctx->btn, LV_GRAD_DIR_NONE, sel);
+
+  solar_flow_update_all_nodes(fw, ctx, fw->layout_2x2, has_battery, has_grid);
 }
