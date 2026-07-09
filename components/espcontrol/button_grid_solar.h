@@ -287,6 +287,18 @@ inline void solar_apply_card_face(SolarCardCtx *ctx) {
 // for the entity state and ha_subscribe_attribute() for unit_of_measurement,
 // exactly as the todo card subscribes to state and friendly_name.
 
+enum class SolarModalTab { LIST, FLOW };
+
+// Persists across solar_open_modal()'s full rebuilds (it tears down and
+// recreates the whole modal on every entity update while open) so switching
+// to the Flow tab isn't lost the next time a value changes. Reset to LIST
+// only when the tile is freshly tapped (see the tap handler below) — not on
+// the live-update refresh path.
+inline SolarModalTab &solar_modal_active_tab() {
+  static SolarModalTab tab = SolarModalTab::LIST;
+  return tab;
+}
+
 // Forward declaration — defined after solar_subscribe_field.
 inline void solar_open_modal(SolarCardCtx *ctx);
 
@@ -607,6 +619,7 @@ inline SolarCardCtx *create_solar_card_context(
   // Tap handler: open the breakdown-list modal (not for flow mode)
   lv_obj_add_event_cb(s.btn, [](lv_event_t *e) {
     SolarCardCtx *ctx = static_cast<SolarCardCtx *>(lv_event_get_user_data(e));
+    solar_modal_active_tab() = SolarModalTab::LIST;
     solar_open_modal(ctx);
   }, LV_EVENT_CLICKED, ctx);
 
