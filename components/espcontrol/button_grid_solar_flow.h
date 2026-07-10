@@ -416,7 +416,12 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
         lv_obj_align(fw->grid_node.val_lbl, LV_ALIGN_CENTER, 0, 0);
       }
       if (fw->grid_node.name_lbl) {
+        // Re-center: the label's width changes with the text ("Grid" vs.
+        // "To Grid"/"From Grid"), and align_to only positions once at
+        // creation — without this it drifts right as the text grows.
         lv_label_set_text(fw->grid_node.name_lbl, exporting ? "To Grid" : "From Grid");
+        lv_obj_align_to(fw->grid_node.name_lbl, fw->grid_node.arc,
+          LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
       }
       if (fw->grid_node.sub_lbl) {
         lv_obj_add_flag(fw->grid_node.sub_lbl, LV_OBJ_FLAG_HIDDEN);
