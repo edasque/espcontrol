@@ -38,6 +38,7 @@ struct SolarCardCtx {
   int width_compensation_percent = 100;
   std::string mode;  // "live" or "today"
   bool invert_production = false;
+  double max_power_kw = 0.0;  // rated max output (kW); 0 = unset → Flow shows a full circle
   SolarField production, consumption, net, battery, from_grid, to_grid;
   bool available = false;
 };
@@ -555,6 +556,13 @@ inline SolarCardCtx *create_solar_card_context(
   bool inv = cfg_option_enabled(p.options, "inv");
   if (!inv) inv = cfg_option_enabled(p.options, "invert_production");
   ctx->invert_production = inv;
+
+  std::string max_power_str = solar_opt("mp", "max_power");
+  if (!max_power_str.empty()) {
+    char *mp_ep = nullptr;
+    double mp_v = std::strtod(max_power_str.c_str(), &mp_ep);
+    if (mp_ep != max_power_str.c_str()) ctx->max_power_kw = mp_v;
+  }
   ctx->accent_color = accent_color;
   ctx->off_color = off_color;
   ctx->small_font = small_font ? small_font : label_font;
