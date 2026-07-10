@@ -41,7 +41,7 @@ static constexpr uint32_t FLOW_COLOR_SOLAR   = 0x50C878;  // mint green
 static constexpr uint32_t FLOW_COLOR_HOME    = 0x6699BB;  // steel blue
 static constexpr uint32_t FLOW_COLOR_BATTERY = 0x22C55E;  // green
 // Grid color comes from ctx->accent_color (primary)
-static constexpr uint32_t FLOW_COLOR_EXPORT  = 0xFCD34D;  // yellow (to-grid)
+static constexpr uint32_t FLOW_COLOR_EXPORT  = 0x22C55E;  // green (to-grid)
 static constexpr uint32_t FLOW_COLOR_IMPORT  = 0xF87171;  // red (from-grid)
 
 // Darken a color by mixing with black (factor 0-100, 100 = full black)
