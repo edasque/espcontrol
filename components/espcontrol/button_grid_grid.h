@@ -1741,7 +1741,12 @@ inline void grid_phase2(
   for (int i = 0; i < ROWS; i++) sp_row_dsc[i] = LV_GRID_FR(1);
   sp_row_dsc[ROWS] = LV_GRID_TEMPLATE_LAST;
 
-  const lv_font_t *sp_icon_fnt = lv_obj_get_style_text_font(slots[0].icon_lbl, LV_PART_MAIN);
+  // Use the canonical tile icon font (font_icon_main, full glyph set) rather
+  // than reading it back off slots[0].icon_lbl: a card in slot 0 (e.g. solar,
+  // climate) reassigns its own icon label to the smaller climate_card_icon
+  // font, which lacks many glyphs (Garage, Lock, …). Inheriting that here made
+  // subpage child icons render as tofu boxes.
+  const lv_font_t *sp_icon_fnt = display_icon_font(display);
 
   lv_obj_t *ref_btn = slots[0].btn;
   for (int i = 0; i < NS; i++) {
