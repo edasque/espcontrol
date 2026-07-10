@@ -351,8 +351,15 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
   };
 
   // ── Solar node ──
+  // Arc fill = % of rated max output when max_power is configured;
+  // otherwise a full circle (previous behaviour, preserved when unset).
+  int solar_arc_pct = 100;
+  if (ctx->max_power_kw > 0.001) {
+    double pct = std::fabs(solar_kw) / ctx->max_power_kw * 100.0;
+    solar_arc_pct = (int)(pct + 0.5);
+  }
   solar_flow_update_node(fw->solar_node,
-    solar_flow_fmt(ctx->production, false), 100);
+    solar_flow_fmt(ctx->production, false), solar_arc_pct);
 
   // ── Home node ──
   double home_kw = solar_flow_to_kw(ctx->consumption, false);
