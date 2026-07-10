@@ -2771,6 +2771,13 @@
             "name": "to_grid",
             "label": "To Grid",
             "kind": "text"
+          },
+          {
+            "name": "max_power",
+            "label": "Max Power (kW)",
+            "kind": "number",
+            "min": 0,
+            "step": 0.1
           }
         ],
         "default": {
