@@ -415,6 +415,9 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
           lv_color_hex(val_color), LV_PART_MAIN);
         lv_obj_align(fw->grid_node.val_lbl, LV_ALIGN_CENTER, 0, 0);
       }
+      if (fw->grid_node.name_lbl) {
+        lv_label_set_text(fw->grid_node.name_lbl, exporting ? "To Grid" : "From Grid");
+      }
       if (fw->grid_node.sub_lbl) {
         lv_obj_add_flag(fw->grid_node.sub_lbl, LV_OBJ_FLAG_HIDDEN);
       }
