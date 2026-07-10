@@ -79,10 +79,12 @@ inline SolarFlowNode solar_flow_make_node(lv_obj_t *parent,
   lv_obj_set_style_arc_width(n.arc, 7, LV_PART_MAIN);  // 30% thicker than base 5
   lv_obj_set_style_arc_rounded(n.arc, true, LV_PART_MAIN);
 
-  // Arc indicator (filled portion)
+  // Arc indicator (filled portion) — unrounded so fill length stays exactly
+  // proportional to the value; a rounded cap would add a fixed-width bump
+  // that visually inflates small percentages (e.g. 20% reading as ~a third).
   lv_obj_set_style_arc_color(n.arc, lv_color_hex(color), LV_PART_INDICATOR);
   lv_obj_set_style_arc_width(n.arc, 7, LV_PART_INDICATOR);
-  lv_obj_set_style_arc_rounded(n.arc, true, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_rounded(n.arc, false, LV_PART_INDICATOR);
 
   // Remove knob completely
   lv_obj_set_style_bg_opa(n.arc, LV_OPA_TRANSP, LV_PART_KNOB);
@@ -384,33 +386,37 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
     show(fw->line_bot, has_battery);
 
     // ── Grid node ──
+    // Single-value display: green export magnitude when exporting, red
+    // import magnitude when importing, nothing when there's no flow.
+    // If both read >0 (sensor glitch), export takes priority.
     if (has_grid && fw->grid_node.arc) {
-      std::string to_str   = ctx->to_grid.available   && !ctx->to_grid.value.empty()
-        ? solar_flow_fmt(ctx->to_grid,   false) : "--";
-      std::string from_str = ctx->from_grid.available && !ctx->from_grid.value.empty()
-        ? solar_flow_fmt(ctx->from_grid, false) : "--";
-
       double to_kw   = solar_flow_to_kw(ctx->to_grid,   false);
       double from_kw = solar_flow_to_kw(ctx->from_grid, false);
-      int    pct     = arc_pct(to_kw > from_kw ? to_kw : from_kw);
+      bool exporting = to_kw > 0.0;
+      bool importing = !exporting && from_kw > 0.0;
 
+      int pct = 0;
+      if (exporting) pct = arc_pct(to_kw);
+      else if (importing) pct = arc_pct(from_kw);
       lv_arc_set_value(fw->grid_node.arc, pct > 100 ? 100 : pct);
 
       if (fw->grid_node.val_lbl) {
-        char buf[48];
-        std::snprintf(buf, sizeof(buf), "+%s", to_str.c_str());
-        lv_label_set_text(fw->grid_node.val_lbl, buf);
+        std::string val_text;
+        uint32_t val_color = FLOW_COLOR_EXPORT;
+        if (exporting) {
+          val_text  = solar_flow_fmt(ctx->to_grid, false);
+          val_color = FLOW_COLOR_EXPORT;
+        } else if (importing) {
+          val_text  = solar_flow_fmt(ctx->from_grid, false);
+          val_color = FLOW_COLOR_IMPORT;
+        }
+        lv_label_set_text(fw->grid_node.val_lbl, val_text.c_str());
         lv_obj_set_style_text_color(fw->grid_node.val_lbl,
-          lv_color_hex(FLOW_COLOR_EXPORT), LV_PART_MAIN);
-        lv_obj_align(fw->grid_node.val_lbl, LV_ALIGN_CENTER, 0, -6);
+          lv_color_hex(val_color), LV_PART_MAIN);
+        lv_obj_align(fw->grid_node.val_lbl, LV_ALIGN_CENTER, 0, 0);
       }
       if (fw->grid_node.sub_lbl) {
-        char buf[48];
-        std::snprintf(buf, sizeof(buf), "-%s", from_str.c_str());
-        lv_label_set_text(fw->grid_node.sub_lbl, buf);
-        lv_obj_set_style_text_color(fw->grid_node.sub_lbl,
-          lv_color_hex(FLOW_COLOR_IMPORT), LV_PART_MAIN);
-        lv_obj_clear_flag(fw->grid_node.sub_lbl, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(fw->grid_node.sub_lbl, LV_OBJ_FLAG_HIDDEN);
       }
     }
     show(fw->grid_node.arc,      has_grid);
