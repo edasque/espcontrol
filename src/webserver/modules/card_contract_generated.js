@@ -1465,6 +1465,13 @@ var CARD_CONTRACT_CARDS = {
         "name": "to_grid",
         "label": "To Grid",
         "kind": "text"
+      },
+      {
+        "name": "max_power",
+        "label": "Max Power (kW)",
+        "kind": "number",
+        "min": 0,
+        "step": 0.1
       }
     ],
     "default": {
@@ -1889,6 +1896,7 @@ var CARD_CONTRACT_OPTION_NAMES = {
   "lawn_mower_mode": "lawn_mower_mode",
   "light_tabs": "light_tabs",
   "lock_mode": "lock_mode",
+  "max_power": "max_power",
   "media_display": "media_display",
   "media_mode": "media_mode",
   "media_now_playing_controls": "media_now_playing_controls",
