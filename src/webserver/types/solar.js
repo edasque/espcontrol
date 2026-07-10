@@ -40,7 +40,8 @@ var SOLAR_CARD_METADATA = {
 // Long keys are accepted on read for migration of existing configs.
 var SOLAR_KEY_SHORT = {
   mode: "m", production: "p", consumption: "c", net: "n",
-  battery: "b", from_grid: "fg", to_grid: "tg", invert_production: "inv"
+  battery: "b", from_grid: "fg", to_grid: "tg", invert_production: "inv",
+  max_power: "mp"
 };
 
 // Solar cards store entity IDs without the "sensor." domain prefix.
@@ -157,6 +158,35 @@ registerButtonType("solar", {
       });
       panel.appendChild(field);
     });
+
+    // Max Power (kW) — Flow mode only. Used by the Flow diagram's Solar
+    // node to show production as a % of rated max output instead of
+    // always rendering a full circle.
+    if (getSolarMode(b) === "flow") {
+      var mpId = helpers.idPrefix + "solar-max-power";
+      var mpInput = document.createElement("input");
+      mpInput.type = "number";
+      mpInput.className = "sp-input";
+      mpInput.id = mpId;
+      mpInput.min = "0";
+      mpInput.step = "0.1";
+      mpInput.placeholder = "e.g. 8.5";
+      mpInput.value = getSolarOption(b, "max_power");
+      var mpField = helpers.fieldWithControl("Max Power (kW)", mpId, mpInput);
+      function commitMaxPower() {
+        var current = getSolarOption(b, "max_power");
+        if (current === mpInput.value) return;
+        setSolarOption(b, "max_power", mpInput.value);
+        helpers.saveField("options", b.options);
+        scheduleRender();
+      }
+      mpInput.addEventListener("change", commitMaxPower);
+      mpInput.addEventListener("blur", commitMaxPower);
+      mpInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { commitMaxPower(); this.blur(); }
+      });
+      panel.appendChild(mpField);
+    }
 
     // Invert Production toggle — shown only when a production entity is set.
     if (getSolarEntityOption(b, "production")) {
