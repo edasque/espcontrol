@@ -364,9 +364,20 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
     solar_flow_fmt(ctx->production, false), solar_arc_pct);
 
   // ── Home node ──
+  // Arc fill = % of home's need currently met by production (self-
+  // consumption), not home's share of production — so it reads as "how
+  // self-sufficient is the house right now" rather than clamping to a
+  // meaningless 100% whenever consumption exceeds production.
   double home_kw = solar_flow_to_kw(ctx->consumption, false);
+  int home_arc_pct = 0;
+  if (std::fabs(home_kw) > 0.001) {
+    double prod_abs = std::fabs(solar_kw);
+    double home_abs = std::fabs(home_kw);
+    double met_kw = prod_abs < home_abs ? prod_abs : home_abs;
+    home_arc_pct = (int)(met_kw / home_abs * 100.0 + 0.5);
+  }
   solar_flow_update_node(fw->home_node,
-    solar_flow_fmt(ctx->consumption, false), arc_pct(home_kw));
+    solar_flow_fmt(ctx->consumption, false), home_arc_pct);
 
   if (fw->layout_2x2) {
     auto show = [](lv_obj_t *o, bool v) {
@@ -395,9 +406,15 @@ inline void solar_flow_apply_card_face(SolarCardCtx *ctx) {
       bool exporting = to_kw > 0.0;
       bool importing = !exporting && from_kw > 0.0;
 
+      // Export % is relative to production (arc_pct's existing baseline);
+      // import % is relative to home's consumption — "what share of the
+      // house's demand is coming from the grid right now".
       int pct = 0;
-      if (exporting) pct = arc_pct(to_kw);
-      else if (importing) pct = arc_pct(from_kw);
+      if (exporting) {
+        pct = arc_pct(to_kw);
+      } else if (importing && std::fabs(home_kw) > 0.001) {
+        pct = (int)(std::fabs(from_kw) / std::fabs(home_kw) * 100.0 + 0.5);
+      }
       lv_arc_set_value(fw->grid_node.arc, pct > 100 ? 100 : pct);
 
       if (fw->grid_node.val_lbl) {
