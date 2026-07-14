@@ -371,7 +371,7 @@ esphome:
             apply_width_compensation(id(temperatures), cfg.width_compensation_percent);
             apply_width_compensation(id(clock_label), cfg.width_compensation_percent);
             // END GENERATED PHASE 2 GRID WIRING
-            grid_phase2(slots, cfg, sp_cfgs, sp_ext, sp_ext2, sp_ext3, sp_ext4, sp_ext5, sp_ext6, sp_ext7,
+            grid_phase2(slots, cfg, sp_cfgs, sp_ext, sp_ext2, sp_ext3,
               id(button_order).state,
               id(button_on_color).state,
               id(main_page)->obj);

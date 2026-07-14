@@ -95,7 +95,8 @@
           "climateCardIcon": "font_icon_card",
           "subpageChevron": "font_icon_status",
           "climateOptionTitle": "font_text_body",
-          "climateOptionValue": "font_text_body"
+          "climateOptionValue": "font_text_body",
+          "tiny": "font_text_tiny"
         },
         "display": {
           "wrapTallLabels": true,
@@ -273,7 +274,8 @@
           "climateCardIcon": "font_icon_card",
           "subpageChevron": "font_icon_status",
           "climateOptionTitle": "font_text_body",
-          "climateOptionValue": "font_text_body"
+          "climateOptionValue": "font_text_body",
+          "tiny": "font_text_tiny"
         },
         "display": {
           "wrapTallLabels": false,
@@ -448,7 +450,8 @@
           "climateCardIcon": "font_icon_card",
           "subpageChevron": "font_icon_status",
           "climateOptionTitle": "font_text_body",
-          "climateOptionValue": "font_text_body"
+          "climateOptionValue": "font_text_body",
+          "tiny": "font_text_tiny"
         },
         "display": {
           "wrapTallLabels": true,
@@ -622,7 +625,8 @@
           "climateCardIcon": "font_icon_card",
           "subpageChevron": "font_icon_status",
           "climateOptionTitle": "font_text_body",
-          "climateOptionValue": "font_text_body"
+          "climateOptionValue": "font_text_body",
+          "tiny": "font_text_small"
         },
         "display": {
           "wrapTallLabels": true,
@@ -797,7 +801,8 @@
           "climateCardIcon": "font_icon_card",
           "subpageChevron": "font_icon_status",
           "climateOptionTitle": "font_text_body",
-          "climateOptionValue": "font_text_body"
+          "climateOptionValue": "font_text_body",
+          "tiny": "font_text_tiny"
         },
         "display": {
           "imageCardDownloaders": 6,
@@ -992,7 +997,8 @@
           "climateCardIcon": "font_icon_card",
           "subpageChevron": "font_icon_status",
           "climateOptionTitle": "font_text_body",
-          "climateOptionValue": "font_text_body"
+          "climateOptionValue": "font_text_body",
+          "tiny": "font_text_tiny"
         },
         "display": {
           "wrapTallLabels": false,
@@ -1166,7 +1172,8 @@
      "climateCardIcon": "font_icon_card",
      "subpageChevron": "font_icon_status",
      "climateOptionTitle": "font_text_body",
-     "climateOptionValue": "font_text_small"
+     "climateOptionValue": "font_text_small",
+     "tiny": "font_text_small"
     },
     "display": {
      "wrapTallLabels": false,
