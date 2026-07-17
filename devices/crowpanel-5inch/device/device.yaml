@@ -66,6 +66,11 @@ esphome:
       - "-DBOARD_HAS_PSRAM"
       - "-DESPCONTROL_DISABLE_TODO=1"
       - "-DESPCONTROL_MAX_GRID_SLOTS=15"
+      # grid_phase2 is a very large function; on this device's pinned Xtensa
+      # toolchain its literal pool overflows l32r range at link time
+      # ("dangerous relocation: l32r: literal target out of range"). Place
+      # literals in the text section next to the code to fix it.
+      - "-mtext-section-literals"
     board_build.esp-idf.memory_type: qio_opi
     board_build.flash_mode: dio
   on_boot:
