@@ -17,8 +17,9 @@ wifi:
 packages:
   espcontrol: !include packages.yaml
 
-# Local web UI bundle with solar + calendar card types.
+# Embed the web UI bundle (with solar + calendar card types) into the
+# firmware so the configurator is self-contained (no CDN / local server).
 # Run: python3 scripts/build.py www
-# Serve: python3 -m http.server 8080 --directory docs/public/webserver/guition-esp32-p4-jc1060p470
 web_server:
-  js_url: "http://192.168.7.154:8080/www.js"
+  js_url: ""
+  js_include: "../../docs/public/webserver/crowpanel-5inch/www.js"
