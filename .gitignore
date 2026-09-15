@@ -27,3 +27,8 @@ wifi-secrets*.yaml
 
 # Temporary local ESPHome entry points used when flashing PR builds.
 devices/*/dev-pr*.yaml
+
+# Scriptable widget prototype: locally generated setup-page bundle and panel
+# configs. Rebuild with 'npm run scriptable:build'.
+scriptable/server/public/www.js
+scriptable/panels/

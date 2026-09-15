@@ -1,0 +1,35 @@
+{
+  "_comment": [
+    "Initial values for the ESPHome entities the setup page reads and writes.",
+    "Keys match common/config/entity_names.json. Values mirror the initial_value /",
+    "initial_option / initial_value settings in common/config/*.yaml so the bridge",
+    "starts in the same state a freshly flashed panel would.",
+    "Entities not listed here fall back to a per-domain empty value."
+  ],
+  "button_on_color": { "value": "FF8C00" },
+  "screen_temperature_unit": { "value": "Auto", "option": ["Auto", "°C", "°F"] },
+  "screen_clock_format": { "value": "24h", "option": ["12h", "24h"] },
+  "screen_language": {
+    "value": "en",
+    "option": ["en", "cs", "da", "de", "es", "fi", "fr", "hu", "it", "nb", "nl", "pl", "pt", "pt-br", "ro", "sk", "sl", "sv", "tr", "uk"]
+  },
+  "screen_saver_action": { "value": "Display Off", "option": ["Display Off", "Screen Dimmed", "Clock"] },
+  "screen_schedule_mode": { "value": "Screen off", "option": ["Screen off", "Screen Dimmed", "Always On", "Clock"] },
+  "home_assistant_artwork_protocol": { "value": "http", "option": ["http", "https"] },
+  "home_assistant_artwork_port": { "value": 8123, "min": 1, "max": 65535, "step": 1 },
+  "firmware_update_frequency": { "value": "Daily", "option": ["Hourly", "Daily", "Weekly", "Monthly"] },
+  "screensaver_timeout": { "value": 60, "min": 10, "max": 3600, "step": 1 },
+  "home_screen_timeout": { "value": 60, "min": 0, "max": 3600, "step": 1 },
+  "screen_clock_bar": { "value": true },
+  "screen_clock_bar_time": { "value": true },
+  "screen_subpage_chevron": { "value": true },
+  "screen_temperature_degree_symbol": { "value": true },
+  "screen_daytime_brightness": { "value": 80, "min": 1, "max": 100, "step": 1 },
+  "screen_nighttime_brightness": { "value": 20, "min": 1, "max": 100, "step": 1 },
+  "screen_brightness_dawn_time": { "value": "07:00" },
+  "screen_brightness_dusk_time": { "value": "21:00" },
+  "firmware_version": { "value": "scriptable-bridge" },
+  "network_transport": { "value": "bridge" },
+  "screen_timezone": { "value": "Auto" },
+  "screen_active_timezone": { "value": "Auto" }
+}

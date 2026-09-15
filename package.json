@@ -32,6 +32,8 @@
     "check:release-confidence": "python3 scripts/check_release_confidence.py",
     "check:release-changelog": "python3 scripts/check_release_changelog.py",
     "check:release-preflight": "npm run check:product && npm run docs:build && npm run check:firmware-release && npm run check:public-firmware-script && npm run check:release-changelog && npm run check:release-confidence",
+    "check:scriptable": "python3 scripts/build_scriptable_bundle.py && node scriptable/test/check_scriptable.js",
+    "check:scriptable-browser": "node scriptable/test/check_scriptable_browser.js",
     "check:timezones": "python3 scripts/check_timezones.py && python3 scripts/check_timezones.py --self-test",
     "check:types": "tsc --noEmit",
     "check:web-smoke": "node scripts/check_web_smoke.js",
@@ -42,6 +44,8 @@
     "docs:preview": "vitepress preview docs",
     "test": "npm run check:fast",
     "test:ci": "npm run check:ci",
+    "scriptable:build": "python3 scripts/build_scriptable_bundle.py",
+    "scriptable:serve": "node scriptable/server/bridge.js",
     "webserver:build": "python3 scripts/build.py www"
   },
   "devDependencies": {

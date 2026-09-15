@@ -1,0 +1,70 @@
+{
+  "id": "scriptable-ipad-4x4",
+  "slots": 16,
+  "public": {
+    "name": "Scriptable iPad Widget",
+    "screenSize": "iPad widget",
+    "resolution": "4 x 4 tiles",
+    "orientation": "Square"
+  },
+  "layout": {
+    "cols": 4,
+    "rows": 4
+  },
+  "settings": {
+    "largeSensorUnitOffsetPercent": -10
+  },
+  "imageCardLimit": 0,
+  "features": {},
+  "web": {
+    "dragMode": "displace",
+    "dragAnimation": true,
+    "disabledCardTypes": [
+      "image",
+      "internal",
+      "screen_lock",
+      "local_sensor",
+      "subpage",
+      "weather_forecast"
+    ],
+    "screen": {
+      "width": "55%",
+      "aspect": "1/1"
+    },
+    "topbar": {
+      "height": 8.0,
+      "padding": "1.25cqw 0.83cqw 0.83cqw",
+      "fontSize": 3.75
+    },
+    "grid": {
+      "top": 9.33,
+      "compactTop": 0.83,
+      "left": 1.04,
+      "right": 1.04,
+      "bottom": 0.83,
+      "gap": 1.39,
+      "fr": "1fr"
+    },
+    "btn": {
+      "radius": 1.67,
+      "padding": 2.2,
+      "iconSize": 7.2,
+      "labelSize": 3.0,
+      "labelLines": 2,
+      "labelLinesDouble": 3
+    },
+    "emptyCell": {
+      "radius": 1.67
+    },
+    "sensorBadge": {
+      "top": 1.6,
+      "right": 1.6,
+      "fontSize": 2.5
+    },
+    "subpageBadge": {
+      "bottom": 1.6,
+      "right": 1.6,
+      "fontSize": 3
+    }
+  }
+}

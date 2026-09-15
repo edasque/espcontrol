@@ -18,6 +18,7 @@ widget (card type). For end-user install/usage, see `README.md` and the
 | `devices/<slug>/` | Per-device entry points and config (see §5). |
 | `docs/public/webserver/<slug>/www.js` | **Built** configurator bundles, one per device, served to the device at runtime. |
 | `scripts/` | Build + verification scripts (`build.py` and the `check_*` validators). |
+| `scriptable/` | Prototype: a virtual panel driven by a Scriptable iPad widget instead of an ESP32 screen. See `scriptable/README.md`. |
 
 The web UI and the firmware share card metadata through generated files, so the
 two stay in sync — you describe a card once in the contract and both sides pick
